@@ -45,14 +45,20 @@ void dentry_reset(struct ezfs_dir_entry *dentry)
 
 int main(int argc, char *argv[])
 {
+	int status;
 	int fd;
 	ssize_t ret, len;
 	struct ezfs_super_block sb;
 	struct ezfs_inode inode;
 	struct ezfs_dir_entry dentry;
+	struct stat stat_buf;
+	off_t big_img_size, big_txt_size;
+	FILE *img_file, *txt_file;
+	size_t img_file_len, txt_file_len;
 
 	char *hello_contents = "Hello world!\n";
 	char *names_contents = "Chun-Wei Shaw, Mohsin Rizvi, Sai Satwik Vaddi\n";
+	char *img_contents, *txt_contents;
 	char buf[EZFS_BLOCK_SIZE];
 	const char zeroes[EZFS_BLOCK_SIZE] = { 0 };
 
@@ -61,9 +67,42 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+	/* Get size and contents of big_img.jpeg */
+	status = stat("big_files/big_img.jpeg", &stat_buf);
+	if (status < 0) {
+		perror("Error stating big_img.jpeg");
+		return -1;
+	}
+	big_img_size = stat_buf.st_size;
+
+	img_contents = malloc(big_img_size * sizeof(char));
+
+	img_file = fopen("big_files/big_img.jpeg", "r");
+	if (!img_file) {
+		perror("Error opening big_img.jpeg");
+		free(img_contents);
+		return -1;
+	}
+	img_file_len = fread(img_contents, sizeof(char), big_img_size, img_file);
+	if (img_file_len != big_img_size) {
+		perror("Bad image file");
+		free(img_contents);
+		return -1;
+	}
+
+	/* Get size and contents of big_txt.txt */
+	status = stat("big_files/big_txt.txt", &stat_buf);
+	if (status < 0) {
+		perror("Error stating big_txt.txt");
+		free(img_contents);
+		return -1;
+	}
+	big_txt_size = stat_buf.st_size;
+
 	fd = open(argv[1], O_RDWR);
 	if (fd == -1) {
 		perror("Error opening the device");
+		free(img_contents);
 		return -1;
 	}
 	memset(&sb, 0, sizeof(sb));
@@ -83,11 +122,11 @@ int main(int argc, char *argv[])
 	/* set bits for subdir, names.txt, big_img.jpeg, and big_txt.txt */
 	SETBIT(sb.free_inodes, 2);
 	SETBIT(sb.free_inodes, 3);
-	/* SETBIT(sb.free_inodes, 4); */
+	SETBIT(sb.free_inodes, 4);
 	/* SETBIT(sb.free_inodes, 5); */
 	SETBIT(sb.free_data_blocks, 2);
 	SETBIT(sb.free_data_blocks, 3);
-	/* SETBIT(sb.free_data_blocks, 4); */
+	SETBIT(sb.free_data_blocks, 4);
 	/* SETBIT(sb.free_data_blocks, 5); */
 
 	/* Write the superblock to the first block of the filesystem. */
@@ -138,8 +177,19 @@ int main(int argc, char *argv[])
 	ret = write(fd, (char *) &inode, sizeof(inode));
 	passert(ret == sizeof(inode), "Write names.txt inode");
 
+	/* Write inode for big_img.jpeg */
+	inode_reset(&inode);
+	inode.nlink = 1;
+	inode.mode = S_IFREG | 0666;
+	inode.data_block_number = EZFS_ROOT_DATABLOCK_NUMBER + 4;
+	inode.file_size = big_img_size;
+	inode.nblocks = 8;
+
+	ret = write(fd, (char *) &inode, sizeof(inode));
+	passert(ret == sizeof(inode), "Write big_img.jpeg inode");
+
 	/* lseek to the next data block */
-	ret = lseek(fd, EZFS_BLOCK_SIZE - 4 * sizeof(struct ezfs_inode),
+	ret = lseek(fd, EZFS_BLOCK_SIZE - 5 * sizeof(struct ezfs_inode),
 		SEEK_CUR);
 	passert(ret >= 0, "Seek past inode table");
 
@@ -188,8 +238,17 @@ int main(int argc, char *argv[])
 	ret = write(fd, (char *) &dentry, sizeof(dentry));
 	passert(ret == sizeof(dentry), "Write dentry for names.txt");
 
+	/* dentry for big_img.jpeg */
+	dentry_reset(&dentry);
+	strncpy(dentry.filename, "big_img.jpeg", sizeof(dentry.filename));
+	dentry.active = 1;
+	dentry.inode_no = EZFS_ROOT_INODE_NUMBER + 4;
+
+	ret = write(fd, (char *) &dentry, sizeof(dentry));
+	passert(ret == sizeof(dentry), "Write dentry for big_img.jpeg");
+
 	/* pad to end of subdir contents */
-	len = EZFS_BLOCK_SIZE - 1 * sizeof(struct ezfs_dir_entry);
+	len = EZFS_BLOCK_SIZE - 2 * sizeof(struct ezfs_dir_entry);
 	ret = write(fd, zeroes, len);
 	passert(ret == len, "Seek to end of subdir contents");
 
@@ -199,11 +258,27 @@ int main(int argc, char *argv[])
 	ret = write(fd, buf, len);
 	passert(ret == len, "Write names.txt contents");
 
+	/* lseek to big_img data block */
+	len = EZFS_BLOCK_SIZE - strlen(names_contents);
+	ret = write(fd, zeroes, len);
+	passert(ret == len, "Seek to img block");
+
+	/* big_img.jpeg contents */
+	ret = write(fd, img_contents, big_img_size);
+	passert(ret == big_img_size, "Write big_img.jpeg contents");
+
+	(void)txt_contents;
+	(void)txt_file_len;
+	(void)txt_file;
+	(void)big_txt_size;
+
 	ret = fsync(fd);
 	passert(ret == 0, "Flush writes to disk");
 
 	close(fd);
 	printf("Device [%s] formatted successfully.\n", argv[1]);
+
+	free(img_contents);
 
 	return 0;
 }
