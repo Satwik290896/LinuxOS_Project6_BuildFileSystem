@@ -79,13 +79,23 @@ int main(int argc, char *argv[])
 	SETBIT(sb.free_data_blocks, 0);
 	SETBIT(sb.free_data_blocks, 1);
 
+	/* set bits for subdir, names.txt, big_img.jpeg, and big_txt.txt */
+	SETBIT(sb.free_inodes, 2);
+	/* SETBIT(sb.free_inodes, 3); */
+	/* SETBIT(sb.free_inodes, 4); */
+	/* SETBIT(sb.free_inodes, 5); */
+	SETBIT(sb.free_data_blocks, 2);
+	/* SETBIT(sb.free_data_blocks, 3); */
+	/* SETBIT(sb.free_data_blocks, 4); */
+	/* SETBIT(sb.free_data_blocks, 5); */
+
 	/* Write the superblock to the first block of the filesystem. */
 	ret = write(fd, (char *)&sb, sizeof(sb));
 	passert(ret == EZFS_BLOCK_SIZE, "Write superblock");
 
 	inode_reset(&inode);
 	inode.mode = S_IFDIR | 0777;
-	inode.nlink = 3; // add 1 to 2 because add another directory
+	inode.nlink = 4; // add 1 to 2 because add another directory
 	inode.data_block_number = EZFS_ROOT_DATABLOCK_NUMBER;
 	inode.file_size = EZFS_BLOCK_SIZE;
 	inode.nblocks = 1;
@@ -105,8 +115,19 @@ int main(int argc, char *argv[])
 	ret = write(fd, (char *) &inode, sizeof(inode));
 	passert(ret == sizeof(inode), "Write hello.txt inode");
 
+	/* Write inode for subdir */
+	inode_reset(&inode);
+	inode.mode = S_IFDIR | 0777;
+	inode.nlink = 2; // "subdir", "."
+	inode.data_block_number = EZFS_ROOT_DATABLOCK_NUMBER + 2;
+	inode.file_size = EZFS_BLOCK_SIZE;
+	inode.nblocks = 1;
+
+	ret = write(fd, (char *) &inode, sizeof(inode));
+	passert(ret == sizeof(inode), "Write subdir inode");
+
 	/* lseek to the next data block */
-	ret = lseek(fd, EZFS_BLOCK_SIZE - 2 * sizeof(struct ezfs_inode),
+	ret = lseek(fd, EZFS_BLOCK_SIZE - 3 * sizeof(struct ezfs_inode),
 		SEEK_CUR);
 	passert(ret >= 0, "Seek past inode table");
 
@@ -119,8 +140,17 @@ int main(int argc, char *argv[])
 	ret = write(fd, (char *) &dentry, sizeof(dentry));
 	passert(ret == sizeof(dentry), "Write dentry for hello.txt");
 
+	/* dentry for subdir */
+	dentry_reset(&dentry);
+	strncpy(dentry.filename, "subdir", sizeof(dentry.filename));
+	dentry.active = 1;
+	dentry.inode_no = EZFS_ROOT_INODE_NUMBER + 2;
+
+	ret = write(fd, (char *) &dentry, sizeof(dentry));
+	passert(ret == sizeof(dentry), "Write dentry for subdir");
+
 	/* lseek to the next data block */
-	len = EZFS_BLOCK_SIZE - sizeof(struct ezfs_dir_entry);
+	len = EZFS_BLOCK_SIZE - 2 * sizeof(struct ezfs_dir_entry);
 	ret = write(fd, zeroes, len);
 	passert(ret == len, "Pad to end of root dentries");
 
@@ -129,6 +159,18 @@ int main(int argc, char *argv[])
 	strncpy(buf, hello_contents, len);
 	ret = write(fd, buf, len);
 	passert(ret == len, "Write hello.txt contents");
+
+	/* lseek to subdir data block */
+	len = EZFS_BLOCK_SIZE - strlen(hello_contents);
+	ret = write(fd, zeroes, len);
+	passert(ret == len, "Seek to subdir block");
+
+	/* subdir contents */
+
+	/* pad to end of subdir contents */
+	len = EZFS_BLOCK_SIZE - 0 * sizeof(struct ezfs_dir_entry);
+	ret = write(fd, zeroes, len);
+	passert(ret == len, "Seek to end of subdir contents");
 
 	ret = fsync(fd);
 	passert(ret == 0, "Flush writes to disk");
