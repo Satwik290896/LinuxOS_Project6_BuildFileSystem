@@ -52,6 +52,7 @@ int main(int argc, char *argv[])
 	struct ezfs_dir_entry dentry;
 
 	char *hello_contents = "Hello world!\n";
+	char *names_contents = "Chun-Wei Shaw, Mohsin Rizvi, Sai Satwik Vaddi\n";
 	char buf[EZFS_BLOCK_SIZE];
 	const char zeroes[EZFS_BLOCK_SIZE] = { 0 };
 
@@ -81,11 +82,11 @@ int main(int argc, char *argv[])
 
 	/* set bits for subdir, names.txt, big_img.jpeg, and big_txt.txt */
 	SETBIT(sb.free_inodes, 2);
-	/* SETBIT(sb.free_inodes, 3); */
+	SETBIT(sb.free_inodes, 3);
 	/* SETBIT(sb.free_inodes, 4); */
 	/* SETBIT(sb.free_inodes, 5); */
 	SETBIT(sb.free_data_blocks, 2);
-	/* SETBIT(sb.free_data_blocks, 3); */
+	SETBIT(sb.free_data_blocks, 3);
 	/* SETBIT(sb.free_data_blocks, 4); */
 	/* SETBIT(sb.free_data_blocks, 5); */
 
@@ -126,8 +127,19 @@ int main(int argc, char *argv[])
 	ret = write(fd, (char *) &inode, sizeof(inode));
 	passert(ret == sizeof(inode), "Write subdir inode");
 
+	/* Write inode for names.txt */
+	inode_reset(&inode);
+	inode.nlink = 1;
+	inode.mode = S_IFREG | 0666;
+	inode.data_block_number = EZFS_ROOT_DATABLOCK_NUMBER + 3;
+	inode.file_size = strlen(names_contents);
+	inode.nblocks = 1;
+
+	ret = write(fd, (char *) &inode, sizeof(inode));
+	passert(ret == sizeof(inode), "Write names.txt inode");
+
 	/* lseek to the next data block */
-	ret = lseek(fd, EZFS_BLOCK_SIZE - 3 * sizeof(struct ezfs_inode),
+	ret = lseek(fd, EZFS_BLOCK_SIZE - 4 * sizeof(struct ezfs_inode),
 		SEEK_CUR);
 	passert(ret >= 0, "Seek past inode table");
 
@@ -167,10 +179,25 @@ int main(int argc, char *argv[])
 
 	/* subdir contents */
 
+	/* dentry for names.txt */
+	dentry_reset(&dentry);
+	strncpy(dentry.filename, "names.txt", sizeof(dentry.filename));
+	dentry.active = 1;
+	dentry.inode_no = EZFS_ROOT_INODE_NUMBER + 3;
+
+	ret = write(fd, (char *) &dentry, sizeof(dentry));
+	passert(ret == sizeof(dentry), "Write dentry for names.txt");
+
 	/* pad to end of subdir contents */
-	len = EZFS_BLOCK_SIZE - 0 * sizeof(struct ezfs_dir_entry);
+	len = EZFS_BLOCK_SIZE - 1 * sizeof(struct ezfs_dir_entry);
 	ret = write(fd, zeroes, len);
 	passert(ret == len, "Seek to end of subdir contents");
+
+	/* names.txt contents */
+	len = strlen(names_contents);
+	strncpy(buf, names_contents, len);
+	ret = write(fd, buf, len);
+	passert(ret == len, "Write names.txt contents");
 
 	ret = fsync(fd);
 	passert(ret == 0, "Flush writes to disk");
