@@ -1,6 +1,6 @@
 # README
 
-Homework 6
+### Homework 6
 
 Chun-Wei Shaw
 
