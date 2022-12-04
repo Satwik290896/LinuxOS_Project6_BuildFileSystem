@@ -12,6 +12,6 @@ Sai Satwik Vaddi
 
 cs4213:
 
-mkr2151:
+mkr2151: 3hrs,
 
 sv2665:
