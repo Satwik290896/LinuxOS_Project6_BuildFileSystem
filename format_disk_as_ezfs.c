@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
 
 	inode_reset(&inode);
 	inode.mode = S_IFDIR | 0777;
-	inode.nlink = 4; // add 1 to 2 because add another directory
+	inode.nlink = 3; // add 1 to 2 because add another directory
 	inode.data_block_number = EZFS_ROOT_DATABLOCK_NUMBER;
 	inode.file_size = EZFS_BLOCK_SIZE;
 	inode.nblocks = 1;
