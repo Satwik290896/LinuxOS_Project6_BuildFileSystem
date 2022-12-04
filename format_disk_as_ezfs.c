@@ -324,7 +324,6 @@ int main(int argc, char *argv[])
 	printf("Device [%s] formatted successfully.\n", argv[1]);
 
 	/* TODO: make sure we close images and free contents in every passert that may go wrong. */
-	/* TODO: why does linux think all files in /mnt are dirs? */
 	fclose(img_file);
 	fclose(txt_file);
 	free(img_contents);
