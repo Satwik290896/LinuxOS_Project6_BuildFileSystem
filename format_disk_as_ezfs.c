@@ -99,10 +99,28 @@ int main(int argc, char *argv[])
 	}
 	big_txt_size = stat_buf.st_size;
 
+	txt_contents = malloc(big_txt_size * sizeof(char));
+
+	txt_file = fopen("big_files/big_txt.txt", "r");
+	if (!txt_file) {
+		perror("Error opening big_txt.txt");
+		free(img_contents);
+		free(txt_contents);
+		return -1;
+	}
+	txt_file_len = fread(txt_contents, sizeof(char), big_txt_size, txt_file);
+	if (txt_file_len != big_txt_size) {
+		perror("Bad txt file");
+		free(img_contents);
+		free(txt_contents);
+		return -1;
+	}
+
 	fd = open(argv[1], O_RDWR);
 	if (fd == -1) {
 		perror("Error opening the device");
 		free(img_contents);
+		free(txt_contents);
 		return -1;
 	}
 	memset(&sb, 0, sizeof(sb));
@@ -123,11 +141,11 @@ int main(int argc, char *argv[])
 	SETBIT(sb.free_inodes, 2);
 	SETBIT(sb.free_inodes, 3);
 	SETBIT(sb.free_inodes, 4);
-	/* SETBIT(sb.free_inodes, 5); */
+	SETBIT(sb.free_inodes, 5);
 	SETBIT(sb.free_data_blocks, 2);
 	SETBIT(sb.free_data_blocks, 3);
 	SETBIT(sb.free_data_blocks, 4);
-	/* SETBIT(sb.free_data_blocks, 5); */
+	SETBIT(sb.free_data_blocks, 5);
 
 	/* Write the superblock to the first block of the filesystem. */
 	ret = write(fd, (char *)&sb, sizeof(sb));
@@ -188,8 +206,19 @@ int main(int argc, char *argv[])
 	ret = write(fd, (char *) &inode, sizeof(inode));
 	passert(ret == sizeof(inode), "Write big_img.jpeg inode");
 
+	/* Write inode for big_txt.txt */
+	inode_reset(&inode);
+	inode.nlink = 1;
+	inode.mode = S_IFREG | 0666;
+	inode.data_block_number = EZFS_ROOT_DATABLOCK_NUMBER + 12;
+	inode.file_size = big_txt_size;
+	inode.nblocks = 2;
+
+	ret = write(fd, (char *) &inode, sizeof(inode));
+	passert(ret == sizeof(inode), "Write big_txt.txt inode");
+
 	/* lseek to the next data block */
-	ret = lseek(fd, EZFS_BLOCK_SIZE - 5 * sizeof(struct ezfs_inode),
+	ret = lseek(fd, EZFS_BLOCK_SIZE - 6 * sizeof(struct ezfs_inode),
 		SEEK_CUR);
 	passert(ret >= 0, "Seek past inode table");
 
@@ -247,8 +276,17 @@ int main(int argc, char *argv[])
 	ret = write(fd, (char *) &dentry, sizeof(dentry));
 	passert(ret == sizeof(dentry), "Write dentry for big_img.jpeg");
 
+	/* dentry for big_txt.txt */
+	dentry_reset(&dentry);
+	strncpy(dentry.filename, "big_txt.txt", sizeof(dentry.filename));
+	dentry.active = 1;
+	dentry.inode_no = EZFS_ROOT_INODE_NUMBER + 5;
+
+	ret = write(fd, (char *) &dentry, sizeof(dentry));
+	passert(ret == sizeof(dentry), "Write dentry for big_txt.txt");
+
 	/* pad to end of subdir contents */
-	len = EZFS_BLOCK_SIZE - 2 * sizeof(struct ezfs_dir_entry);
+	len = EZFS_BLOCK_SIZE - 3 * sizeof(struct ezfs_dir_entry);
 	ret = write(fd, zeroes, len);
 	passert(ret == len, "Seek to end of subdir contents");
 
@@ -267,10 +305,17 @@ int main(int argc, char *argv[])
 	ret = write(fd, img_contents, big_img_size);
 	passert(ret == big_img_size, "Write big_img.jpeg contents");
 
-	(void)txt_contents;
-	(void)txt_file_len;
-	(void)txt_file;
-	(void)big_txt_size;
+	/* lseek to big_txt data block */
+	int overflow = big_img_size % EZFS_BLOCK_SIZE;
+	if (overflow != 0) {
+		len = EZFS_BLOCK_SIZE - (big_img_size % EZFS_BLOCK_SIZE);
+		ret = write(fd, zeroes, len);
+		passert(ret == len, "Seek to txt block");
+	}
+
+	/* big_txt.txt contents */
+	ret = write(fd, txt_contents, big_txt_size);
+	passert(ret == big_txt_size, "Write big_txt.txt contents");
 
 	ret = fsync(fd);
 	passert(ret == 0, "Flush writes to disk");
@@ -278,7 +323,12 @@ int main(int argc, char *argv[])
 	close(fd);
 	printf("Device [%s] formatted successfully.\n", argv[1]);
 
+	/* TODO: make sure we close images and free contents in every passert that may go wrong. */
+	/* TODO: why does linux think all files in /mnt are dirs? */
+	fclose(img_file);
+	fclose(txt_file);
 	free(img_contents);
+	free(txt_contents);
 
 	return 0;
 }
