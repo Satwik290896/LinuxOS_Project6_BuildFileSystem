@@ -1,11 +1,11 @@
-README
-Homework 6
+# README
+# Homework 6
 
-Chun-Wei Shaw
-Mohsin Rizvi
-Sai Satwik Vaddi
+## Chun-Wei Shaw
+## Mohsin Rizvi
+## Sai Satwik Vaddi
 
-## Hours spent and difficulty rankings
+### Hours spent and difficulty rankings
 
 cs4213:
 mkr2151:
