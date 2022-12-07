@@ -139,19 +139,14 @@ struct inode *myez_get_inode(struct super_block *sb,
 
 static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 {
-	//struct myez_fs_info *fsi = s->s_fs_info;
+	struct ezfs_sb_buffer_heads *fsi = s->s_fs_info;
 	struct buffer_head *bh, *sbh;
 	struct myez_super_block *myez_sb;
 	struct myez_sb_info *info;
 	struct inode *inode;
+	struct ezfs_inode *e_ino;
 	int ret = -EINVAL;
 
-	/*info = kzalloc(sizeof(*info), GFP_KERNEL);
-	if (!info)
-		return -ENOMEM;
-	mutex_init(&info->myez_lock);
-	*/
-	//s->s_fs_info = info;
 	s->s_time_min = 0;
 	s->s_time_max = U32_MAX;
 
@@ -162,22 +157,45 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 	if (!sbh)
 		goto out;
 	
-	myez_sb = (struct myez_super_block *)sbh->b_data;
-	if (le32_to_cpu(myez_sb->s_magic) != EZFS_MAGIC_NUMBER) {
-		goto out1;
-	}
+	fsi->sb_bh = sbh;
+	
+	
+	sbh = sb_bread(s, 1);
+	fsi->i_store_bh = sbh;
+
 
 
 	s->s_magic = EZFS_MAGIC_NUMBER;
 	s->s_op = &myez_sops;
 	
-	inode = myez_get_inode(s, NULL, S_IFDIR, 0);
+	inode = iget_locked(s, 1);
+
+	e_ino = (struct ezfs_inode *) sbh->b_data;
+	/*
+	BFS_I(inode)->i_sblock =  le32_to_cpu(di->i_sblock);
+	BFS_I(inode)->i_eblock =  le32_to_cpu(di->i_eblock);
+	BFS_I(inode)->i_dsk_ino = le16_to_cpu(di->i_ino);
+	i_uid_write(inode, le32_to_cpu(di->i_uid));
+	i_gid_write(inode,  le32_to_cpu(di->i_gid));
+	set_nlink(inode, le32_to_cpu(di->i_nlink));*/
+	
+	inode->i_mode = e_ino->mode;
+	//inode->i_uid = e_ino->uid;
+	//inode->i_gid = e_ino->gid;
+	i_uid_write(inode, e_ino->uid);
+	i_gid_write(inode, e_ino->gid);
+	set_nlink(inode, e_ino->nlink);
+	inode->i_size = 4096;
+	//inode->i_nlink = e_ino->nlink;
+	inode->i_blocks = e_ino->nblocks;
+	inode->i_atime = e_ino->i_atime;
+	inode->i_mtime = e_ino->i_mtime;
+	inode->i_ctime = e_ino->i_ctime;
+	
 	s->s_root = d_make_root(inode);
 	if (!s->s_root)
 		return -ENOMEM;
 
-	brelse(sbh);
-	//mutex_destroy(&info->myez_lock);
 	return 0;
 	
 out2:
@@ -201,8 +219,13 @@ static int myez_get_tree(struct fs_context *fc)
 }
 
 
+static void myez_free_fc(struct fs_context *fc)
+{
+	kfree(fc->s_fs_info);
+}
+
 static const struct fs_context_operations myez_context_ops = {
-	//.free		= myez_free_fc,
+	.free		= myez_free_fc,
 	//.parse_param	= myez_parse_param,
 	.get_tree	= myez_get_tree,
 };
@@ -215,13 +238,27 @@ static const struct fs_context_operations myez_context_ops = {
 
 int myez_init_fs_context(struct fs_context *fc)
 {
+	struct ezfs_sb_buffer_heads *fsi;
 
+	fsi = kzalloc(sizeof(*fsi), GFP_KERNEL);
+	if (!fsi)
+		return -ENOMEM;
+
+	//fsi->mount_opts.mode = RAMFS_DEFAULT_MODE;
+	fc->s_fs_info = fsi;
+	
+	printk(KERN_WARNING, "[MYEZ]init_fs_context enter");
+	//sb_bread(, 0);
 	fc->ops = &myez_context_ops;
 	return 0;
 }
 
 void myez_kill_sb(struct super_block *sb)
 {
+	struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info;
+
+	brelse(fsi->sb_bh);
+	brelse(fsi->i_store_bh);
 	kfree(sb->s_fs_info);
 	kill_litter_super(sb);
 }
