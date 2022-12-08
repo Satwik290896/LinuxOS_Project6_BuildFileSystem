@@ -45,8 +45,7 @@ struct myez_sb_info {
 	struct mutex myez_lock;
 };
 
-
-/* BFS superblock layout on disk */
+/* EZFS superblock layout on disk */
 struct myez_super_block {
 	__le32 s_magic;
 	__le32 s_start;
@@ -80,7 +79,6 @@ static const struct inode_operations myez_file_inode_operations = {
 	.setattr	= simple_setattr,
 	.getattr	= simple_getattr,
 };
-
 
 static const struct file_operations myez_file_operations = {
 	.read_iter	= generic_file_read_iter,
@@ -149,7 +147,6 @@ static const struct inode_operations myez_dir_inops = {
 	.rename		= simple_rename,*/
 };
 
-
 const struct file_operations myez_dir_operations = {
 	.read		= generic_read_dir,
 	.iterate_shared	= myez_readdir,
@@ -158,7 +155,7 @@ const struct file_operations myez_dir_operations = {
 };
 
 struct inode *myez_get_inode(struct super_block *sb,
-				unsigned long ino)
+			     unsigned long ino)
 {
 	struct inode * inode = iget_locked(sb, ino);
 
@@ -173,10 +170,14 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 	struct ezfs_sb_buffer_heads *fsi = s->s_fs_info;
 	struct buffer_head *bh, *sbh;
 	struct myez_super_block *myez_sb;
-	struct myez_sb_info *info;
+       	struct myez_sb_info *info;
 	struct inode *inode;
 	struct ezfs_inode *e_ino;
 	int ret = -EINVAL;
+
+	(void)info;
+	(void)myez_sb;
+	(void)bh;
 
 	s->s_time_min = 0;
 	s->s_time_max = U32_MAX;
@@ -187,28 +188,23 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 	
 	if (!sbh)
 		goto out;
-	
-	fsi->sb_bh = sbh;
-	
-	
+
+	fsi->sb_bh = sbh;	
+
 	sbh = sb_bread(s, 1);
 	fsi->i_store_bh = sbh;
-
-
 
 	s->s_magic = EZFS_MAGIC_NUMBER;
 	s->s_op = &myez_sops;
 	
 	inode = myez_get_inode(s, 1);
-	
-	if (IS_ERR(inode)) {
-		ret = PTR_ERR(inode);
-		return ret;
-	}
+
+	if (IS_ERR(inode))
+		return PTR_ERR(inode);
 
 	if (inode->i_state & I_NEW) {
 		e_ino = (struct ezfs_inode *) sbh->b_data;
-	
+
 		inode->i_mode = e_ino->mode;
 		i_uid_write(inode, e_ino->uid);
 		i_gid_write(inode, e_ino->gid);
@@ -219,21 +215,21 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 		inode->i_mtime = e_ino->i_mtime;
 		inode->i_ctime = e_ino->i_ctime;
 		inode->i_private = e_ino;
-	
+
 		inode->i_op = &myez_dir_inops;
 		inode->i_fop = &myez_dir_operations;
 	}
-		
+
 	s->s_root = d_make_root(inode);
 	if (!s->s_root)
 		return -ENOMEM;
 
 	return 0;
-	
-out2:
+
+	//out2:
 	dput(s->s_root);
 	s->s_root = NULL;
-out1:
+	//out1:
 	brelse(sbh);
 out:
 	//mutex_destroy(&info->myez_lock);
@@ -250,7 +246,6 @@ static int myez_get_tree(struct fs_context *fc)
 	return ret;
 }
 
-
 static void myez_free_fc(struct fs_context *fc)
 {
 	kfree(fc->s_fs_info);
@@ -261,11 +256,6 @@ static const struct fs_context_operations myez_context_ops = {
 	//.parse_param	= myez_parse_param,
 	.get_tree	= myez_get_tree,
 };
-
-
-
-
-
 
 
 int myez_init_fs_context(struct fs_context *fc)
@@ -279,7 +269,7 @@ int myez_init_fs_context(struct fs_context *fc)
 	//fsi->mount_opts.mode = RAMFS_DEFAULT_MODE;
 	fc->s_fs_info = fsi;
 	
-	printk(KERN_WARNING, "[MYEZ]init_fs_context enter");
+	//printk(KERN_WARNING, "[MYEZ]init_fs_context enter");
 	//sb_bread(, 0);
 	fc->ops = &myez_context_ops;
 	return 0;
@@ -297,7 +287,7 @@ void myez_kill_sb(struct super_block *sb)
 
 
 static struct file_system_type myez_fs_type = {
-	.name		= "myez",
+	.name		= "myezfs",
 	.init_fs_context = myez_init_fs_context,
 	//.parameters	= myez_fs_parameters,
 	/*.mount		= myez_mount,*/
@@ -305,30 +295,14 @@ static struct file_system_type myez_fs_type = {
 	.fs_flags	= FS_REQUIRES_DEV,
 };
 
-
-
-
-
-
 static int __init init_myez_fs(void)
 {
-	int err; //= init_inodecache();
-	//if (err)
-	//	goto out1;
-	err = register_filesystem(&myez_fs_type);
-	if (err)
-		goto out;
-	return 0;
-out:
-	//destroy_inodecache();
-out1:
-	return err;
+	return register_filesystem(&myez_fs_type);
 }
 
 static void __exit exit_myez_fs(void)
 {
 	unregister_filesystem(&myez_fs_type);
-	//destroy_inodecache();
 }
 
 
@@ -336,4 +310,3 @@ static void __exit exit_myez_fs(void)
 module_init(init_myez_fs)
 module_exit(exit_myez_fs)
 MODULE_LICENSE("GPL");
-
