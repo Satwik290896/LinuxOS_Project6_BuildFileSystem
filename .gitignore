@@ -1,0 +1,14 @@
+format_disk_as_ezfs
+modules.order
+Module.symvers
+myez.ko
+myez.mod
+myez.mod.c
+myez.mod.o
+myez.o
+.modules.order.cmd
+.Module.symvers.cmd
+.myez.ko.cmd
+.myez.mod.cmd
+.myez.mod.o.cmd
+.myez.o.cmd
