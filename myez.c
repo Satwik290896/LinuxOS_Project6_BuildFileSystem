@@ -95,16 +95,18 @@ static int myez_readdir(struct file *f, struct dir_context *ctx)
 	struct ezfs_inode *e_inode = dir->i_private;
 	struct buffer_head *bh;
 	struct ezfs_dir_entry *de;
-	unsigned int offset;
 	int block;
 
 	long long pos;
 	
-	printk(KERN_INFO "Entered ReadDir [LS]  --- Loading module... Hello World!\n");
-	if (ctx->pos & (4096 - 1)) {
+	printk(KERN_INFO "Entered ReadDir [LS]  --- Loading module... Hello World 1332!: %lld \n", ctx->pos);
+	if (ctx->pos > (4096-1)) {
+		printk(KERN_INFO "Returning ReadDir [LS]  --- Loading module... Hello World!: %lld \n", ctx->pos);
 		return -EINVAL;
 	}
 	
+	printk(KERN_INFO "Coming here ReadDir [LS]  --- Loading module... Hello World!: %lld \n", ctx->pos);
+
 	if (!dir_emit_dots(f, ctx))
 		return 0;
 		
@@ -121,14 +123,14 @@ static int myez_readdir(struct file *f, struct dir_context *ctx)
 		return 0;
 	}
 
-	offset = 0;
-	while (pos < 4096 / sizeof(struct ezfs_dir_entry)) {
+	printk(KERN_INFO "ezfs_dir-entry size: %d\n", sizeof(struct ezfs_dir_entry));
+	if (pos < 4096) {
 		de = (struct ezfs_dir_entry *)(bh->b_data + pos);
 			
-		if (de->inode_no) {
-			printk(KERN_INFO "Entered Read DirEmit 1  --- Loading module... Hello World!\n %lld", ctx->pos);
+		if(de->inode_no) {
+			
 			int size = strnlen(de->filename, EZFS_FILENAME_BUF_SIZE);
-				
+			printk(KERN_INFO "Entered Read DirEmit 1  --- Loading module... Hello World!\n %lld %d", ctx->pos, size);	
 			if (!dir_emit(ctx, de->filename, size,
 					de->inode_no, DT_UNKNOWN)) {
 				brelse(bh);
@@ -136,9 +138,7 @@ static int myez_readdir(struct file *f, struct dir_context *ctx)
 			}
 		}
 	
-		offset += 1;
-		ctx->pos += 1;
-		pos = ctx->pos - 2;
+		ctx->pos += sizeof(struct ezfs_dir_entry);
 	}
 	brelse(bh);
 	
