@@ -93,7 +93,51 @@ static const struct file_operations myez_file_operations = {
 	//.get_unmapped_area	= ramfs_mmu_get_unmapped_area,
 };
 
-static const struct inode_operations myez_dir_inode_operations = {
+static int myez_readdir(struct file *f, struct dir_context *ctx)
+{
+	struct inode *dir = file_inode(f);
+	struct ezfs_inode *e_inode = dir->i_private;
+	struct buffer_head *bh;
+	struct ezfs_dir_entry *de;
+	unsigned int offset;
+	int block;
+
+	if (ctx->pos & (4096 - 1)) {
+		return -EINVAL;
+	}
+
+	//while (ctx->pos < dir->i_size) {
+		
+	block = e_inode->data_block_number;
+		
+	bh = sb_bread(dir->i_sb, block);
+	if (!bh) {
+		return 0;
+	}
+
+	offset = 0;
+	while (ctx->pos < 4096) {
+		de = (struct ezfs_dir_entry *)(bh->b_data + offset);
+			
+		if (de->inode_no) {
+			int size = strnlen(de->filename, EZFS_FILENAME_BUF_SIZE);
+				
+			if (!dir_emit(ctx, de->filename, size,
+					de->inode_no, DT_UNKNOWN)) {
+				brelse(bh);
+				return 0;
+			}
+		}
+	
+		offset += 1;
+		ctx->pos += 1;
+	}
+	brelse(bh);
+	
+	return 0;
+}
+
+static const struct inode_operations myez_dir_inops = {
 	/*.create		= ramfs_create,
 	.lookup		= simple_lookup,
 	.link		= simple_link,
@@ -105,35 +149,22 @@ static const struct inode_operations myez_dir_inode_operations = {
 	.rename		= simple_rename,*/
 };
 
+
+const struct file_operations myez_dir_operations = {
+	.read		= generic_read_dir,
+	.iterate_shared	= myez_readdir,
+	.fsync		= generic_file_fsync,
+	.llseek		= generic_file_llseek,
+};
+
 struct inode *myez_get_inode(struct super_block *sb,
-				const struct inode *dir, umode_t mode, dev_t dev)
+				unsigned long ino)
 {
-	struct inode * inode = new_inode(sb);
+	struct inode * inode = iget_locked(sb, ino);
 
-	if (inode) {
-		inode->i_ino = get_next_ino();
-		inode_init_owner(inode, dir, mode);
-		inode->i_mapping->a_ops = &myez_aops;
-		mapping_set_gfp_mask(inode->i_mapping, GFP_HIGHUSER);
-		mapping_set_unevictable(inode->i_mapping);
-		inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-		switch (mode & S_IFMT) {
-		default:
-			init_special_inode(inode, mode, dev);
-			break;
-		case S_IFREG:
-			inode->i_op = &myez_file_inode_operations;
-			inode->i_fop = &myez_file_operations;
-			break;
-		case S_IFDIR:
-			inode->i_op = &myez_dir_inode_operations;
-			inode->i_fop = &simple_dir_operations;
-
-			/* directory inodes start off with i_nlink == 2 (for "." entry) */
-			inc_nlink(inode);
-			break;
-		}
-	}
+	if (!inode)
+		return ERR_PTR(-ENOMEM);
+	
 	return inode;
 }
 
@@ -168,30 +199,31 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 	s->s_magic = EZFS_MAGIC_NUMBER;
 	s->s_op = &myez_sops;
 	
-	inode = iget_locked(s, 1);
+	inode = myez_get_inode(s, 1);
+	
+	if (IS_ERR(inode)) {
+		ret = PTR_ERR(inode);
+		return ret;
+	}
 
-	e_ino = (struct ezfs_inode *) sbh->b_data;
-	/*
-	BFS_I(inode)->i_sblock =  le32_to_cpu(di->i_sblock);
-	BFS_I(inode)->i_eblock =  le32_to_cpu(di->i_eblock);
-	BFS_I(inode)->i_dsk_ino = le16_to_cpu(di->i_ino);
-	i_uid_write(inode, le32_to_cpu(di->i_uid));
-	i_gid_write(inode,  le32_to_cpu(di->i_gid));
-	set_nlink(inode, le32_to_cpu(di->i_nlink));*/
+	if (inode->i_state & I_NEW) {
+		e_ino = (struct ezfs_inode *) sbh->b_data;
 	
-	inode->i_mode = e_ino->mode;
-	//inode->i_uid = e_ino->uid;
-	//inode->i_gid = e_ino->gid;
-	i_uid_write(inode, e_ino->uid);
-	i_gid_write(inode, e_ino->gid);
-	set_nlink(inode, e_ino->nlink);
-	inode->i_size = 4096;
-	//inode->i_nlink = e_ino->nlink;
-	inode->i_blocks = e_ino->nblocks;
-	inode->i_atime = e_ino->i_atime;
-	inode->i_mtime = e_ino->i_mtime;
-	inode->i_ctime = e_ino->i_ctime;
+		inode->i_mode = e_ino->mode;
+		i_uid_write(inode, e_ino->uid);
+		i_gid_write(inode, e_ino->gid);
+		set_nlink(inode, e_ino->nlink);
+		inode->i_size = 4096;
+		inode->i_blocks = e_ino->nblocks;
+		inode->i_atime = e_ino->i_atime;
+		inode->i_mtime = e_ino->i_mtime;
+		inode->i_ctime = e_ino->i_ctime;
+		inode->i_private = e_ino;
 	
+		inode->i_op = &myez_dir_inops;
+		inode->i_fop = &myez_dir_operations;
+	}
+		
 	s->s_root = d_make_root(inode);
 	if (!s->s_root)
 		return -ENOMEM;
