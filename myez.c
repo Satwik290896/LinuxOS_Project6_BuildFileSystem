@@ -168,7 +168,7 @@ struct inode *myez_get_inode(struct super_block *sb,
 static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 {
 	struct ezfs_sb_buffer_heads *fsi = s->s_fs_info;
-	struct buffer_head *bh, *sbh;
+	struct buffer_head *bh, *sbh, *sbh2;
 	struct myez_super_block *myez_sb;
        	struct myez_sb_info *info;
 	struct inode *inode;
@@ -191,8 +191,11 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 
 	fsi->sb_bh = sbh;	
 
-	sbh = sb_bread(s, 1);
-	fsi->i_store_bh = sbh;
+	sbh2 = sb_bread(s, 1);
+	fsi->i_store_bh = sbh2;
+
+	if (!sbh2)
+		goto out;
 
 	s->s_magic = EZFS_MAGIC_NUMBER;
 	s->s_op = &myez_sops;
@@ -203,7 +206,7 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 		return PTR_ERR(inode);
 
 	if (inode->i_state & I_NEW) {
-		e_ino = (struct ezfs_inode *) sbh->b_data;
+		e_ino = (struct ezfs_inode *) sbh2->b_data;
 
 		inode->i_mode = e_ino->mode;
 		i_uid_write(inode, e_ino->uid);
@@ -227,10 +230,10 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 	return 0;
 
 	//out2:
-	dput(s->s_root);
-	s->s_root = NULL;
+	//dput(s->s_root);
+	//s->s_root = NULL;
 	//out1:
-	brelse(sbh);
+	//brelse(sbh);
 out:
 	//mutex_destroy(&info->myez_lock);
 	//kfree(info);
@@ -269,7 +272,7 @@ int myez_init_fs_context(struct fs_context *fc)
 	//fsi->mount_opts.mode = RAMFS_DEFAULT_MODE;
 	fc->s_fs_info = fsi;
 	
-	//printk(KERN_WARNING, "[MYEZ]init_fs_context enter");
+	printk(KERN_EMERG, "[MYEZ]init_fs_context enter");
 	//sb_bread(, 0);
 	fc->ops = &myez_context_ops;
 	return 0;
@@ -297,11 +300,13 @@ static struct file_system_type myez_fs_type = {
 
 static int __init init_myez_fs(void)
 {
+	printk(KERN_EMERG, "[MYEZ Register] init_fs_context enter");
 	return register_filesystem(&myez_fs_type);
 }
 
 static void __exit exit_myez_fs(void)
 {
+	printk(KERN_EMERG, "[MYEZ UNRegister] init_fs_context enter");
 	unregister_filesystem(&myez_fs_type);
 }
 
