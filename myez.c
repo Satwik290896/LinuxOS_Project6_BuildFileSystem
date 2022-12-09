@@ -38,6 +38,7 @@
 
 #define MYEZ_MAGIC		0x1BADFACF
 
+umode_t g_mode;
 
 struct myez_sb_info {
 	unsigned long si_blocks;
@@ -130,9 +131,9 @@ static int myez_readdir(struct file *f, struct dir_context *ctx)
 		if(de->inode_no) {
 			
 			int size = strnlen(de->filename, EZFS_FILENAME_BUF_SIZE);
-			printk(KERN_INFO "Entered Read DirEmit 1  --- Loading module... Hello World!\n %lld %d DT_UNKNOWN: %d", ctx->pos, size, fs_umode_to_ftype(dir->i_mode));
+			printk(KERN_INFO "Entered Read DirEmit 1  --- Loading module... Hello World!\n %lld %d DT_UNKNOWN: %d", ctx->pos, size, S_DT(dir->i_mode));
 			if (!dir_emit(ctx, de->filename, size,
-					de->inode_no, fs_umode_to_ftype(dir->i_mode))) {
+					de->inode_no, S_DT(dir->i_mode))) {
 				brelse(bh);
 				return 0;
 			}
@@ -167,6 +168,7 @@ static struct buffer_head *ezfs_find_entry(struct inode *dir,
 	while (offset < dir->i_size) {
 		de = (struct ezfs_dir_entry *)(bh->b_data + offset);
 		offset += sizeof(struct ezfs_dir_entry);
+		printk(KERN_INFO "Entered ez_find_entry [LS 3]  --- Loading module... Hello World!: %s\n", de->filename);
 		if (!(memcmp(name, de->filename, namelen))) {
 			printk(KERN_INFO "Entered ez_find_entry [LS 3]  --- Loading module... Hello World!: %s\n", name);
 			*res_dir = de;
@@ -237,6 +239,12 @@ struct inode *myez_get_inode(struct super_block *sb,
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 	
+	if (inode->i_state & I_NEW) {
+		inode->i_mode = g_mode;
+		inode->i_size = 4096;
+		inode->i_op = &myez_dir_inops;
+		inode->i_fop = &myez_dir_operations;
+	}
 	return inode;
 }
 
@@ -283,11 +291,13 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 	if (IS_ERR(inode))
 		return PTR_ERR(inode);
 
+	g_mode = e_ino->mode;
 	if (inode->i_state & I_NEW) {
 		printk(KERN_INFO "inode NEW  --- Loading module... Hello World!\n");
 		e_ino = (struct ezfs_inode *) sbh2->b_data;
 
 		inode->i_mode = e_ino->mode;
+		//g_mode = 
 		i_uid_write(inode, e_ino->uid);
 		i_gid_write(inode, e_ino->gid);
 		set_nlink(inode, e_ino->nlink);

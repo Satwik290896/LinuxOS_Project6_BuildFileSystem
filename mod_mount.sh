@@ -3,7 +3,8 @@
 make
 sudo umount -l /mnt/ez
 sudo losetup --detach /dev/loop0
-sudo losetup --detach /dev/loop0
+sudo losetup --detach /dev/loop1
+sudo losetup --detach /dev/loop2
 sudo rmmod myez
 sudo rmmod ez
 sudo mkdir -p /mnt/ez
