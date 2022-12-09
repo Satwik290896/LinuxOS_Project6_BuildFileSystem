@@ -74,6 +74,7 @@ static int myez_get_block(struct inode *inode, sector_t block,
 {
 	int err;
 	struct super_block *sb = inode->i_sb;
+	struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info;
 	struct ezfs_inode *e_inode = inode->i_private;
 	uint64_t block_start = e_inode->data_block_number;
 	struct ezfs_dir_entry *de;
@@ -82,14 +83,34 @@ static int myez_get_block(struct inode *inode, sector_t block,
 	uint64_t block_size = 4096;
 	uint64_t n_blocks = (size/block_size);
 	
-	uint64_t phys = block_start;
+	uint64_t phys = block + block_start;
 	
 	if (size % block_size != 0)
 		n_blocks += 1;
 	
-	if (block < (inode->i_blocks)/8) {
-		map_bh(bh_result, sb, block + block_start);
+	if (!create) {
+		if (block < (inode->i_blocks)/8) {
+			map_bh(bh_result, sb, phys);
+		
+		}
 		return 0;
+	}
+	
+	
+	if (block < (inode->i_blocks)/8)  {
+		printk(KERN_INFO "[MYEZ] Make Sure Writing file %d\n", block);
+		map_bh(bh_result, sb, phys);
+		mark_inode_dirty(inode);
+		return 0;
+	}
+	
+	if (!IS_SET((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), phys)) {
+		map_bh(bh_result, sb, phys);
+		inode->i_blocks += 8;
+		SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), phys);
+	}
+	else {
+		/*Need to do Stuff*/
 	}
 	
 	return 0;
@@ -103,10 +124,49 @@ static int myez_readpage(struct file *file, struct page *page)
 	return block_read_full_page(page, myez_get_block);
 }
 
+static int myez_writepage(struct page *page, struct writeback_control *wbc)
+{
+	printk(KERN_INFO "[MYEZ W2] Make Sure Writing PAGE file \n");
+	return block_write_full_page(page, myez_get_block, wbc);
+}
+
+static void myez_write_failed(struct address_space *mapping, loff_t to)
+{
+	struct inode *inode = mapping->host;
+
+	printk(KERN_INFO "[MYEZ W3] Make Sure Writing file FAILED\n");
+	if (to > inode->i_size)
+		truncate_pagecache(inode, inode->i_size);
+}
+
+static int myez_write_begin(struct file *file, struct address_space *mapping,
+			loff_t pos, unsigned len, unsigned flags,
+			struct page **pagep, void **fsdata)
+{
+	int ret;
+
+	printk(KERN_INFO "[MYEZ W4] Make Begin Writing file \n");
+	ret = block_write_begin(mapping, pos, len, flags, pagep,
+				myez_get_block);
+	if (unlikely(ret))
+		myez_write_failed(mapping, pos + len);
+	
+	return ret;
+		
+}
+
+static sector_t myez_bmap(struct address_space *mapping, sector_t block)
+{
+	printk(KERN_INFO "[MYEZ BMAP] Make Begin Writing file \n");
+	return generic_block_bmap(mapping, block, myez_get_block);
+}
+
 static const struct address_space_operations myez_aops = {
 	.readpage	= myez_readpage,
-	//.write_begin	= simple_write_begin,
-	//.write_end	= simple_write_end,
+	.writepage	= myez_writepage,
+	.write_begin	= myez_write_begin,
+	.write_end	= generic_write_end,
+	.bmap		= myez_bmap,
 	//.set_page_dirty	= __set_page_dirty_no_writeback,
 };
 
@@ -120,7 +180,7 @@ static const struct file_operations myez_file_operations = {
 	.read_iter	= generic_file_read_iter,
 	.write_iter	= generic_file_write_iter,
 	.mmap		= generic_file_mmap,
-	//.fsync		= noop_fsync,
+	.fsync		= generic_file_fsync,
 	.splice_read	= generic_file_splice_read,
 	//.splice_write	= iter_file_splice_write,
 	.llseek		= generic_file_llseek,

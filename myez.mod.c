@@ -26,6 +26,7 @@ MODULE_INFO(retpoline, "Y");
 static const struct modversion_info ____versions[]
 __used __section("__versions") = {
 	{ 0xf1fbc9ab, "module_layout" },
+	{ 0xc5cca43f, "generic_write_end" },
 	{ 0x706fcede, "generic_file_splice_read" },
 	{ 0xc861e61e, "generic_file_mmap" },
 	{ 0xb65f8f05, "generic_file_write_iter" },
@@ -44,6 +45,7 @@ __used __section("__versions") = {
 	{ 0xe061d924, "make_kgid" },
 	{ 0xa5ece68a, "make_kuid" },
 	{ 0xe54d17ab, "iget_locked" },
+	{ 0x6f36a382, "__mark_inode_dirty" },
 	{ 0xcbd4898c, "fortify_panic" },
 	{ 0xa916b694, "strnlen" },
 	{ 0xab8a1e1b, "__bread_gfp" },
@@ -51,7 +53,8 @@ __used __section("__versions") = {
 	{ 0x83fc992e, "pv_ops" },
 	{ 0xba8fbd64, "_raw_spin_lock" },
 	{ 0x65487097, "__x86_indirect_thunk_rax" },
-	{ 0xc5850110, "printk" },
+	{ 0xc833a065, "truncate_pagecache" },
+	{ 0xf6007e82, "block_write_begin" },
 	{ 0x5b8239ca, "__x86_return_thunk" },
 	{ 0x5c599162, "kmem_cache_alloc_trace" },
 	{ 0xd1ed3dd3, "kmalloc_caches" },
@@ -59,7 +62,10 @@ __used __section("__versions") = {
 	{ 0x1014c9ad, "__brelse" },
 	{ 0x37a0cba, "kfree" },
 	{ 0x330c317d, "get_tree_bdev" },
+	{ 0xd5669e9d, "block_write_full_page" },
 	{ 0xea6f53aa, "block_read_full_page" },
+	{ 0xae6d286a, "generic_block_bmap" },
+	{ 0xc5850110, "printk" },
 	{ 0xbdfb6dbb, "__fentry__" },
 };
 
