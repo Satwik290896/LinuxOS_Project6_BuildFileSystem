@@ -130,9 +130,9 @@ static int myez_readdir(struct file *f, struct dir_context *ctx)
 		if(de->inode_no) {
 			
 			int size = strnlen(de->filename, EZFS_FILENAME_BUF_SIZE);
-			printk(KERN_INFO "Entered Read DirEmit 1  --- Loading module... Hello World!\n %lld %d", ctx->pos, size);
+			printk(KERN_INFO "Entered Read DirEmit 1  --- Loading module... Hello World!\n %lld %d DT_UNKNOWN: %d", ctx->pos, size, fs_umode_to_ftype(dir->i_mode));
 			if (!dir_emit(ctx, de->filename, size,
-					de->inode_no, DT_UNKNOWN)) {
+					de->inode_no, fs_umode_to_ftype(dir->i_mode))) {
 				brelse(bh);
 				return 0;
 			}
@@ -168,6 +168,7 @@ static struct buffer_head *ezfs_find_entry(struct inode *dir,
 		de = (struct ezfs_dir_entry *)(bh->b_data + offset);
 		offset += sizeof(struct ezfs_dir_entry);
 		if (!(memcmp(name, de->filename, namelen))) {
+			printk(KERN_INFO "Entered ez_find_entry [LS 3]  --- Loading module... Hello World!: %s\n", name);
 			*res_dir = de;
 			return bh;
 		}
