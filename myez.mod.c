@@ -26,6 +26,10 @@ MODULE_INFO(retpoline, "Y");
 static const struct modversion_info ____versions[]
 __used __section("__versions") = {
 	{ 0xf1fbc9ab, "module_layout" },
+	{ 0x706fcede, "generic_file_splice_read" },
+	{ 0xc861e61e, "generic_file_mmap" },
+	{ 0xb65f8f05, "generic_file_write_iter" },
+	{ 0x4bc8c7d8, "generic_file_read_iter" },
 	{ 0xd7914529, "generic_file_fsync" },
 	{ 0x211540f2, "generic_read_dir" },
 	{ 0x5fb4af97, "generic_file_llseek" },
@@ -55,6 +59,7 @@ __used __section("__versions") = {
 	{ 0x1014c9ad, "__brelse" },
 	{ 0x37a0cba, "kfree" },
 	{ 0x330c317d, "get_tree_bdev" },
+	{ 0xea6f53aa, "block_read_full_page" },
 	{ 0xbdfb6dbb, "__fentry__" },
 };
 

@@ -67,8 +67,44 @@ struct myez_super_block {
 
 struct inode *myez_get_inode(struct super_block *sb, unsigned long ino);
 
+
+
+static int myez_get_block(struct inode *inode, sector_t block,
+			struct buffer_head *bh_result, int create)
+{
+	int err;
+	struct super_block *sb = inode->i_sb;
+	struct ezfs_inode *e_inode = inode->i_private;
+	uint64_t block_start = e_inode->data_block_number;
+	struct ezfs_dir_entry *de;
+	
+	uint64_t size = inode->i_size;
+	uint64_t block_size = 4096;
+	uint64_t n_blocks = (size/block_size);
+	
+	uint64_t phys = block_start;
+	
+	if (size % block_size != 0)
+		n_blocks += 1;
+	
+	if (block < (inode->i_blocks)/8) {
+		map_bh(bh_result, sb, block + block_start);
+		return 0;
+	}
+	
+	return 0;
+	
+	//de = (struct ezfs_dir_entry *)(bh->b_data);
+	
+	
+}
+static int myez_readpage(struct file *file, struct page *page)
+{
+	return block_read_full_page(page, myez_get_block);
+}
+
 static const struct address_space_operations myez_aops = {
-	//.readpage	= simple_readpage,
+	.readpage	= myez_readpage,
 	//.write_begin	= simple_write_begin,
 	//.write_end	= simple_write_end,
 	//.set_page_dirty	= __set_page_dirty_no_writeback,
@@ -81,13 +117,13 @@ static const struct inode_operations myez_file_inode_operations = {
 };
 
 static const struct file_operations myez_file_operations = {
-	//.read_iter	= generic_file_read_iter,
-	//.write_iter	= generic_file_write_iter,
-	//.mmap		= generic_file_mmap,
+	.read_iter	= generic_file_read_iter,
+	.write_iter	= generic_file_write_iter,
+	.mmap		= generic_file_mmap,
 	//.fsync		= noop_fsync,
-	//.splice_read	= generic_file_splice_read,
+	.splice_read	= generic_file_splice_read,
 	//.splice_write	= iter_file_splice_write,
-	//.llseek		= generic_file_llseek,
+	.llseek		= generic_file_llseek,
 	//.get_unmapped_area	= ramfs_mmu_get_unmapped_area,
 };
 
@@ -281,7 +317,8 @@ struct inode *myez_get_inode(struct super_block *sb,
 	i_gid_write(inode, di->gid);
 	set_nlink(inode, di->nlink);
 	
-	inode->i_blocks = di->nblocks;
+	inode->i_mapping->a_ops = &myez_aops;
+	inode->i_blocks = di->nblocks * 8;
 	inode->i_atime = di->i_atime;
 	inode->i_mtime = di->i_mtime;
 	inode->i_ctime = di->i_ctime;
@@ -348,7 +385,7 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 		i_gid_write(inode, e_ino->gid);
 		set_nlink(inode, e_ino->nlink);
 		inode->i_size = 4096;
-		inode->i_blocks = e_ino->nblocks;
+		inode->i_blocks = e_ino->nblocks * 8;
 		inode->i_atime = e_ino->i_atime;
 		inode->i_mtime = e_ino->i_mtime;
 		inode->i_ctime = e_ino->i_ctime;
@@ -356,6 +393,7 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 
 		inode->i_op = &myez_dir_inops;
 		inode->i_fop = &myez_dir_operations;
+		inode->i_mapping->a_ops = &myez_aops;
 	}
 
 	printk(KERN_INFO "inode is done  --- Loading module... Hello World!\n");
