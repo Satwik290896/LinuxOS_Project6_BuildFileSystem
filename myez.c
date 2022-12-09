@@ -39,6 +39,7 @@
 #define MYEZ_MAGIC		0x1BADFACF
 
 umode_t g_mode;
+struct ezfs_inode *temp_e_ino;
 
 struct myez_sb_info {
 	unsigned long si_blocks;
@@ -127,7 +128,8 @@ static int myez_readdir(struct file *f, struct dir_context *ctx)
 	printk(KERN_INFO "ezfs_dir-entry size: %lu\n", sizeof(struct ezfs_dir_entry));
 	if (pos < 4096) {
 		de = (struct ezfs_dir_entry *)(bh->b_data + pos);
-			
+		
+		if (de->active == 1) {
 		if(de->inode_no) {
 			
 			int size = strnlen(de->filename, EZFS_FILENAME_BUF_SIZE);
@@ -137,6 +139,7 @@ static int myez_readdir(struct file *f, struct dir_context *ctx)
 				brelse(bh);
 				return 0;
 			}
+		}
 		}
 	
 		ctx->pos += sizeof(struct ezfs_dir_entry);
@@ -169,10 +172,12 @@ static struct buffer_head *ezfs_find_entry(struct inode *dir,
 		de = (struct ezfs_dir_entry *)(bh->b_data + offset);
 		offset += sizeof(struct ezfs_dir_entry);
 		printk(KERN_INFO "Entered ez_find_entry [LS 3]  --- Loading module... Hello World!: %s\n", de->filename);
+		if (de->active == 1) {
 		if (!(memcmp(name, de->filename, namelen))) {
 			printk(KERN_INFO "Entered ez_find_entry [LS 3]  --- Loading module... Hello World!: %s\n", name);
 			*res_dir = de;
 			return bh;
+		}
 		}
 	}
 	brelse(bh);
@@ -234,17 +239,51 @@ static const struct super_operations myez_sops = {
 struct inode *myez_get_inode(struct super_block *sb,
 			     unsigned long ino)
 {
-	struct inode * inode = iget_locked(sb, ino);
+	struct inode *inode = iget_locked(sb, ino);
+	struct ezfs_inode *di;
+	struct buffer_head *bh;
+	int off;
 
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
+
+	if (!(inode->i_state & I_NEW))
+		return inode;
+		
 	
-	if (inode->i_state & I_NEW) {
-		inode->i_mode = g_mode;
-		inode->i_size = 4096;
+	bh = sb_bread(inode->i_sb, EZFS_INODE_STORE_DATABLOCK_NUMBER);
+	if (!bh) {
+		iget_failed(inode);
+		return ERR_PTR(-EIO);
+	}
+	off = ino - EZFS_ROOT_INODE_NUMBER;
+	di = (struct ezfs_inode *)bh->b_data + off;//(off * sizeof(struct ezfs_inode));
+
+	inode->i_mode = di->mode;
+	if (S_ISDIR(inode->i_mode)) {
+		// dir
+		inode->i_mode |= S_IFDIR;
 		inode->i_op = &myez_dir_inops;
 		inode->i_fop = &myez_dir_operations;
+		inode->i_size = 4096;
+	} else {
+		// file
+		inode->i_mode |= S_IFREG;
+		inode->i_op = &myez_file_inode_operations;
+		inode->i_fop = &myez_file_operations;
+		inode->i_size = di->file_size;
 	}
+	i_uid_write(inode, di->uid);
+	i_gid_write(inode, di->gid);
+	set_nlink(inode, di->nlink);
+	
+	inode->i_blocks = di->nblocks;
+	inode->i_atime = di->i_atime;
+	inode->i_mtime = di->i_mtime;
+	inode->i_ctime = di->i_ctime;
+
+	brelse(bh);
+
 	return inode;
 }
 
@@ -291,10 +330,12 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 	if (IS_ERR(inode))
 		return PTR_ERR(inode);
 
+	e_ino = (struct ezfs_inode *) sbh2->b_data;
 	g_mode = e_ino->mode;
+	temp_e_ino = e_ino;
 	if (inode->i_state & I_NEW) {
 		printk(KERN_INFO "inode NEW  --- Loading module... Hello World!\n");
-		e_ino = (struct ezfs_inode *) sbh2->b_data;
+		
 
 		inode->i_mode = e_ino->mode;
 		//g_mode = 
