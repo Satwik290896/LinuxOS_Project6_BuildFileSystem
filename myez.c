@@ -122,6 +122,7 @@ static int myez_readdir(struct file *f, struct dir_context *ctx)
 		
 	bh = sb_bread(dir->i_sb, block);
 	if (!bh) {
+		brelse(bh);
 		return 0;
 	}
 
@@ -164,8 +165,10 @@ static struct buffer_head *ezfs_find_entry(struct inode *dir,
 		return NULL;
 
 	bh = sb_bread(dir->i_sb, ((struct ezfs_inode *)dir->i_private)->data_block_number); //container_of(dir, struct ezfs_inode, vfs_inode)->sb_block);
-	if (!bh)
+	if (!bh) {
+		brelse(bh);
 		return NULL;
+	}
 
 	// do the lookup
 	while (offset < dir->i_size) {
@@ -173,8 +176,9 @@ static struct buffer_head *ezfs_find_entry(struct inode *dir,
 		offset += sizeof(struct ezfs_dir_entry);
 		printk(KERN_INFO "Entered ez_find_entry [LS 3]  --- Loading module... Hello World!: %s\n", de->filename);
 		if (de->active == 1) {
+		printk(KERN_INFO "Entered ez_find_entry [LS 4]  --- Loading module... Hello World!: %s\n", de->filename);
 		if (!(memcmp(name, de->filename, namelen))) {
-			printk(KERN_INFO "Entered ez_find_entry [LS 3]  --- Loading module... Hello World!: %s\n", name);
+			printk(KERN_INFO "Entered ez_find_entry [LS 5]  --- Loading module... Hello World!: %s\n", name);
 			*res_dir = de;
 			return bh;
 		}
@@ -282,6 +286,7 @@ struct inode *myez_get_inode(struct super_block *sb,
 	inode->i_mtime = di->i_mtime;
 	inode->i_ctime = di->i_ctime;
 
+	inode->i_private = di;
 	brelse(bh);
 
 	return inode;
