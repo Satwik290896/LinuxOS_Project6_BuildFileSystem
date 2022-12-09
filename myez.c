@@ -63,7 +63,7 @@ struct myez_super_block {
 	__u32 s_padding[118];
 };
 
-
+struct inode *myez_get_inode(struct super_block *sb, unsigned long ino);
 
 static const struct address_space_operations myez_aops = {
 	//.readpage	= simple_readpage,
@@ -123,14 +123,14 @@ static int myez_readdir(struct file *f, struct dir_context *ctx)
 		return 0;
 	}
 
-	printk(KERN_INFO "ezfs_dir-entry size: %d\n", sizeof(struct ezfs_dir_entry));
+	printk(KERN_INFO "ezfs_dir-entry size: %lu\n", sizeof(struct ezfs_dir_entry));
 	if (pos < 4096) {
 		de = (struct ezfs_dir_entry *)(bh->b_data + pos);
 			
 		if(de->inode_no) {
 			
 			int size = strnlen(de->filename, EZFS_FILENAME_BUF_SIZE);
-			printk(KERN_INFO "Entered Read DirEmit 1  --- Loading module... Hello World!\n %lld %d", ctx->pos, size);	
+			printk(KERN_INFO "Entered Read DirEmit 1  --- Loading module... Hello World!\n %lld %d", ctx->pos, size);
 			if (!dir_emit(ctx, de->filename, size,
 					de->inode_no, DT_UNKNOWN)) {
 				brelse(bh);
@@ -145,11 +145,60 @@ static int myez_readdir(struct file *f, struct dir_context *ctx)
 	return 0;
 }
 
-static struct dentry *myez_lookup(struct inode *dir, struct dentry *dentry,
-						unsigned int flags)
+static struct buffer_head *ezfs_find_entry(struct inode *dir,
+					   const struct qstr *child,
+					   struct ezfs_dir_entry **res_dir)
 {
-	printk(KERN_INFO "Entered LOOKUP [LS 2]  --- Loading module... Hello World!\n");
+	unsigned long offset = 0;
+	struct buffer_head *bh = NULL;
+	struct ezfs_dir_entry *de;
+	const unsigned char *name = child->name;
+	int namelen = child->len;
+
+	*res_dir = NULL;
+	if (namelen > EZFS_FILENAME_BUF_SIZE)
+		return NULL;
+
+	bh = sb_bread(dir->i_sb, ((struct ezfs_inode *)dir->i_private)->data_block_number); //container_of(dir, struct ezfs_inode, vfs_inode)->sb_block);
+	if (!bh)
+		return NULL;
+
+	// do the lookup
+	while (offset < dir->i_size) {
+		de = (struct ezfs_dir_entry *)(bh->b_data + offset);
+		offset += sizeof(struct ezfs_dir_entry);
+		if (!(memcmp(name, de->filename, namelen))) {
+			*res_dir = de;
+			return bh;
+		}
+	}
+	brelse(bh);
+
 	return NULL;
+}
+
+static struct dentry *myez_lookup(struct inode *dir, struct dentry *dentry,
+				  unsigned int flags)
+{
+	struct inode *inode = NULL;
+	struct buffer_head *bh;
+	struct ezfs_dir_entry *de;
+	//	struct ezfs_sb_buffer_heads *fsi = dir->i_sb->s_fs_info;
+
+	printk(KERN_INFO "Entered LOOKUP [LS 2]  --- Loading module... Hello World!\n");
+
+	if (dentry->d_name.len > EZFS_FILENAME_BUF_SIZE)
+		return ERR_PTR(-ENAMETOOLONG);
+
+	//	mutex_lock(((struct ezfs_super_block *)fsi->sb_bh)->ezfs_lock);
+	bh = ezfs_find_entry(dir, &dentry->d_name, &de);
+	if (bh) {
+		brelse(bh);
+		inode = myez_get_inode(dir->i_sb, de->inode_no);
+	}
+	//	mutex_unlock(((struct ezfs_super_block *)fsi->sb_bh)->ezfs_lock);
+
+	return d_splice_alias(inode, dentry);
 }
 static const struct inode_operations myez_dir_inops = {
 	//.create		= ramfs_create,
