@@ -42,6 +42,7 @@ umode_t g_mode;
 struct ezfs_inode *temp_e_ino;
 
 uint64_t empty_sblock_no = 16;
+struct mutex myezfs_lock;
 
 struct myez_sb_info {
 	unsigned long si_blocks;
@@ -125,6 +126,8 @@ static int myez_get_block(struct inode *inode, sector_t block,
 	if (phys >= EZFS_MAX_DATA_BLKS + 2) {
 		return -ENOSPC;
 	}
+	
+	mutex_lock(&myezfs_lock);
 	if (!IS_SET((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), phys)) {
 		printk(KERN_INFO "[MYEZ LS 2] Make Sure Writing file %d %d \n", block, phys);
 		map_bh(bh_result, sb, phys);
@@ -140,12 +143,15 @@ static int myez_get_block(struct inode *inode, sector_t block,
 		printk(KERN_INFO "[MYEZ LS3] Make Sure Writing file %d %d\n", block,phys);
 		/*Need to do Stuff*/
 		
-		if ((empty_sblock_no + ((inode->i_blocks)/8)) >= EZFS_MAX_DATA_BLKS + 2)
+		if ((empty_sblock_no + ((inode->i_blocks)/8)) >= EZFS_MAX_DATA_BLKS + 2) {
+			mutex_unlock(&myezfs_lock);
 			return -ENOSPC;
-			
+		}			
 		for (i = 0; i < (inode->i_blocks)/8; i++) {
-			if (myez_move_block(i, empty_sblock_no + i, sb))
+			if (myez_move_block(i, empty_sblock_no + i, sb)) {
+				mutex_unlock(&myezfs_lock);
 				return -EIO;
+			}
 			SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), empty_sblock_no + i);
 		}
 		e_inode->data_block_number = empty_sblock_no;
@@ -157,9 +163,12 @@ static int myez_get_block(struct inode *inode, sector_t block,
 		mark_inode_dirty(inode);
 		map_bh(bh_result, sb, phys);
 		empty_sblock_no += 1;
+		
+		mutex_unlock(&myezfs_lock);
 		return 0;
 	}
 	
+	mutex_unlock(&myezfs_lock);
 	return 0;
 	
 	//de = (struct ezfs_dir_entry *)(bh->b_data);
@@ -390,13 +399,19 @@ static int ezfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 }
 
 
+static void myez_put_super(struct super_block *s)
+{
+	mutex_destroy(&myezfs_lock);
+	//s->s_fs_info = NULL;
+}
+
 
 static const struct super_operations myez_sops = {
 	//.alloc_inode	= myez_alloc_inode,
 	//.free_inode	= myez_free_inode,
 	.write_inode	= ezfs_write_inode,
 	//.evict_inode	= myez_evict_inode,
-	//.put_super	= myez_put_super,
+	.put_super	= myez_put_super,
 	//.statfs		= myez_statfs,
 };
 
@@ -467,6 +482,8 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 	(void)myez_sb;
 	(void)bh;
 
+
+	mutex_init(&myezfs_lock);
 	s->s_time_min = 0;
 	s->s_time_max = U32_MAX;
 
@@ -493,8 +510,10 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 	inode = myez_get_inode(s, 1);
 
 	printk(KERN_INFO "super sbh2 is done  --- Loading module... Hello World!\n");
-	if (IS_ERR(inode))
+	if (IS_ERR(inode)) {
+		mutex_destroy(&myezfs_lock);
 		return PTR_ERR(inode);
+	}
 
 	e_ino = (struct ezfs_inode *) sbh2->b_data;
 	g_mode = e_ino->mode;
@@ -522,8 +541,10 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 
 	printk(KERN_INFO "inode is done  --- Loading module... Hello World!\n");
 	s->s_root = d_make_root(inode);
-	if (!s->s_root)
+	if (!s->s_root) {
+		mutex_destroy(&myezfs_lock);
 		return -ENOMEM;
+	}
 
 	printk(KERN_INFO "Made Root Super completed --- Loading module... Hello World!\n");
 	return 0;
@@ -537,6 +558,7 @@ out:
 	//mutex_destroy(&info->myez_lock);
 	//kfree(info);
 	s->s_fs_info = NULL;
+	mutex_destroy(&myezfs_lock);
 	return ret;
 	
 }

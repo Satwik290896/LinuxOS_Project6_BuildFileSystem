@@ -38,6 +38,7 @@ __used __section("__versions") = {
 	{ 0x1f82d21a, "register_filesystem" },
 	{ 0x12971fcb, "d_make_root" },
 	{ 0xb5b8b809, "sb_set_blocksize" },
+	{ 0x977f511b, "__mutex_init" },
 	{ 0x648c07bc, "d_splice_alias" },
 	{ 0x449ad0a7, "memcmp" },
 	{ 0x5ac4ad96, "iget_failed" },
@@ -50,6 +51,8 @@ __used __section("__versions") = {
 	{ 0x69acdf38, "memcpy" },
 	{ 0x9534ef77, "__getblk_gfp" },
 	{ 0x6f36a382, "__mark_inode_dirty" },
+	{ 0x409bcb62, "mutex_unlock" },
+	{ 0x2ab7989d, "mutex_lock" },
 	{ 0xcbd4898c, "fortify_panic" },
 	{ 0xa916b694, "strnlen" },
 	{ 0xab8a1e1b, "__bread_gfp" },
@@ -68,8 +71,8 @@ __used __section("__versions") = {
 	{ 0xd5669e9d, "block_write_full_page" },
 	{ 0xea6f53aa, "block_read_full_page" },
 	{ 0xae6d286a, "generic_block_bmap" },
-	{ 0x5b8239ca, "__x86_return_thunk" },
 	{ 0xc5850110, "printk" },
+	{ 0x5b8239ca, "__x86_return_thunk" },
 	{ 0xbdfb6dbb, "__fentry__" },
 };
 
