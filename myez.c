@@ -41,6 +41,8 @@
 umode_t g_mode;
 struct ezfs_inode *temp_e_ino;
 
+uint64_t empty_sblock_no = 16;
+
 struct myez_sb_info {
 	unsigned long si_blocks;
 	unsigned long si_freeb;
@@ -68,6 +70,21 @@ struct myez_super_block {
 struct inode *myez_get_inode(struct super_block *sb, unsigned long ino);
 
 
+static int myez_move_block(unsigned long from, unsigned long to,
+					struct super_block *sb)
+{
+	struct buffer_head *bh, *new;
+
+	bh = sb_bread(sb, from);
+	if (!bh)
+		return -EIO;
+	new = sb_getblk(sb, to);
+	memcpy(new->b_data, bh->b_data, bh->b_size);
+	mark_buffer_dirty(new);
+	bforget(bh);
+	brelse(new);
+	return 0;
+}
 
 static int myez_get_block(struct inode *inode, sector_t block,
 			struct buffer_head *bh_result, int create)
@@ -84,6 +101,7 @@ static int myez_get_block(struct inode *inode, sector_t block,
 	uint64_t n_blocks = (size/block_size);
 	
 	uint64_t phys = block + block_start;
+	int i=0;
 	
 	if (size % block_size != 0)
 		n_blocks += 1;
@@ -110,11 +128,28 @@ static int myez_get_block(struct inode *inode, sector_t block,
 		inode->i_blocks += 8;
 		SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), phys);
 		mark_inode_dirty(inode);
+		
+		if (phys >= empty_sblock_no) {
+			empty_sblock_no = phys + 1;
+		}
 	}
 	else {
 		printk(KERN_INFO "[MYEZ LS3] Make Sure Writing file %d %d\n", block,phys);
 		/*Need to do Stuff*/
-		return -ENOSPC;
+		
+		for (i = 0; i < (inode->i_blocks)/8; i++) {
+			if (myez_move_block(i, empty_sblock_no + i, sb))
+				return -EIO;
+		}
+		e_inode->data_block_number = empty_sblock_no;
+		empty_sblock_no += (inode->i_blocks)/8;
+		phys = empty_sblock_no;
+		inode->i_blocks += 8;
+
+		mark_inode_dirty(inode);
+		map_bh(bh_result, sb, phys);
+		empty_sblock_no += 1;
+		return 0;
 	}
 	
 	return 0;
