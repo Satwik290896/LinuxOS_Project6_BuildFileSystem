@@ -140,10 +140,12 @@ static int myez_get_block(struct inode *inode, sector_t block,
 		for (i = 0; i < (inode->i_blocks)/8; i++) {
 			if (myez_move_block(i, empty_sblock_no + i, sb))
 				return -EIO;
+			SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), empty_sblock_no + i);
 		}
 		e_inode->data_block_number = empty_sblock_no;
 		empty_sblock_no += (inode->i_blocks)/8;
 		phys = empty_sblock_no;
+		SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), phys);
 		inode->i_blocks += 8;
 
 		mark_inode_dirty(inode);
