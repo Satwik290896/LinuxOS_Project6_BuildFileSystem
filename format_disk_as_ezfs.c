@@ -142,6 +142,7 @@ int main(int argc, char *argv[])
 	SETBIT(sb.free_inodes, 3);
 	SETBIT(sb.free_inodes, 4);
 	SETBIT(sb.free_inodes, 5);
+	SETBIT(sb.free_inodes, 6);
 	SETBIT(sb.free_data_blocks, 2);
 	SETBIT(sb.free_data_blocks, 3);
 	SETBIT(sb.free_data_blocks, 4);

@@ -42,6 +42,7 @@ umode_t g_mode;
 struct ezfs_inode *temp_e_ino;
 
 uint64_t empty_sblock_no = 16;
+uint64_t empty_inode_no = 7;
 struct mutex myezfs_lock;
 
 struct myez_sb_info {
@@ -358,14 +359,21 @@ static struct dentry *myez_lookup(struct inode *dir, struct dentry *dentry,
 	bh = ezfs_find_entry(dir, &dentry->d_name, &de);
 	if (bh) {
 		brelse(bh);
+		printk(KERN_INFO "Entered LOOKUP [LS 2000]  --- Loading module... %lld \n", de->inode_no);
 		inode = myez_get_inode(dir->i_sb, de->inode_no);
 	}
 	//	mutex_unlock(((struct ezfs_super_block *)fsi->sb_bh)->ezfs_lock);
 
 	return d_splice_alias(inode, dentry);
 }
+
+static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
+						bool excl)
+{
+	return 0;
+}
 static const struct inode_operations myez_dir_inops = {
-	//.create		= ramfs_create,
+	.create		= myez_create,
 	.lookup		= myez_lookup,
 	//.link		= simple_link,
 	//.unlink		= simple_unlink,
