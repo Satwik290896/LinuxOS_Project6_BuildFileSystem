@@ -146,6 +146,16 @@ int main(int argc, char *argv[])
 	SETBIT(sb.free_data_blocks, 3);
 	SETBIT(sb.free_data_blocks, 4);
 	SETBIT(sb.free_data_blocks, 5);
+	SETBIT(sb.free_data_blocks, 6);
+	SETBIT(sb.free_data_blocks, 7);
+	SETBIT(sb.free_data_blocks, 8);
+	SETBIT(sb.free_data_blocks, 9);
+	SETBIT(sb.free_data_blocks, 10);
+	SETBIT(sb.free_data_blocks, 11);
+	SETBIT(sb.free_data_blocks, 12);
+	SETBIT(sb.free_data_blocks, 13);
+	SETBIT(sb.free_data_blocks, 14);
+	SETBIT(sb.free_data_blocks, 15);
 
 	/* Write the superblock to the first block of the filesystem. */
 	ret = write(fd, (char *)&sb, sizeof(sb));

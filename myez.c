@@ -98,19 +98,23 @@ static int myez_get_block(struct inode *inode, sector_t block,
 	
 	
 	if (block < (inode->i_blocks)/8)  {
-		printk(KERN_INFO "[MYEZ] Make Sure Writing file %d\n", block);
+		printk(KERN_INFO "[MYEZ] Make Sure Writing file %d %d\n", block, phys);
 		map_bh(bh_result, sb, phys);
-		mark_inode_dirty(inode);
+
 		return 0;
 	}
 	
 	if (!IS_SET((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), phys)) {
+		printk(KERN_INFO "[MYEZ LS 2] Make Sure Writing file %d %d \n", block, phys);
 		map_bh(bh_result, sb, phys);
 		inode->i_blocks += 8;
 		SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), phys);
+		mark_inode_dirty(inode);
 	}
 	else {
+		printk(KERN_INFO "[MYEZ LS3] Make Sure Writing file %d %d\n", block,phys);
 		/*Need to do Stuff*/
+		return -ENOSPC;
 	}
 	
 	return 0;
