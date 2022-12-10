@@ -122,6 +122,9 @@ static int myez_get_block(struct inode *inode, sector_t block,
 		return 0;
 	}
 	
+	if (phys >= EZFS_MAX_DATA_BLKS + 2) {
+		return -ENOSPC;
+	}
 	if (!IS_SET((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), phys)) {
 		printk(KERN_INFO "[MYEZ LS 2] Make Sure Writing file %d %d \n", block, phys);
 		map_bh(bh_result, sb, phys);
@@ -137,6 +140,9 @@ static int myez_get_block(struct inode *inode, sector_t block,
 		printk(KERN_INFO "[MYEZ LS3] Make Sure Writing file %d %d\n", block,phys);
 		/*Need to do Stuff*/
 		
+		if ((empty_sblock_no + ((inode->i_blocks)/8)) >= EZFS_MAX_DATA_BLKS + 2)
+			return -ENOSPC;
+			
 		for (i = 0; i < (inode->i_blocks)/8; i++) {
 			if (myez_move_block(i, empty_sblock_no + i, sb))
 				return -EIO;
@@ -368,10 +374,27 @@ const struct file_operations myez_dir_operations = {
 	.llseek		= generic_file_llseek,
 };
 
+
+static int ezfs_write_inode(struct inode *inode, struct writeback_control *wbc)
+{
+	struct ezfs_inode *e_inode = inode->i_private;
+	
+	printk(KERN_INFO "[EZFS INODE Disk writeup]  --- Loading module... Hello World!\n");
+	
+	e_inode->nblocks = (inode->i_blocks)/8;
+	e_inode->i_atime = inode->i_atime;
+	e_inode->i_mtime = inode->i_mtime;
+	e_inode->i_ctime = inode->i_ctime;
+	
+	return 0;
+}
+
+
+
 static const struct super_operations myez_sops = {
 	//.alloc_inode	= myez_alloc_inode,
 	//.free_inode	= myez_free_inode,
-	//.write_inode	= myez_write_inode,
+	.write_inode	= ezfs_write_inode,
 	//.evict_inode	= myez_evict_inode,
 	//.put_super	= myez_put_super,
 	//.statfs		= myez_statfs,

@@ -59,7 +59,6 @@ __used __section("__versions") = {
 	{ 0x65487097, "__x86_indirect_thunk_rax" },
 	{ 0xc833a065, "truncate_pagecache" },
 	{ 0xf6007e82, "block_write_begin" },
-	{ 0x5b8239ca, "__x86_return_thunk" },
 	{ 0x5c599162, "kmem_cache_alloc_trace" },
 	{ 0xd1ed3dd3, "kmalloc_caches" },
 	{ 0x981b9b41, "kill_block_super" },
@@ -69,6 +68,7 @@ __used __section("__versions") = {
 	{ 0xd5669e9d, "block_write_full_page" },
 	{ 0xea6f53aa, "block_read_full_page" },
 	{ 0xae6d286a, "generic_block_bmap" },
+	{ 0x5b8239ca, "__x86_return_thunk" },
 	{ 0xc5850110, "printk" },
 	{ 0xbdfb6dbb, "__fentry__" },
 };
