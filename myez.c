@@ -535,12 +535,14 @@ static struct ezfs_inode *find_inode(struct super_block *sb, uint64_t ino,
 				     struct buffer_head **p)
 {
 	ino -= EZFS_ROOT_INODE_NUMBER;
-	
+
 	*p = sb_bread(sb, EZFS_INODE_STORE_DATABLOCK_NUMBER);
 	if (!*p)
 		return ERR_PTR(-EIO);
 
-	return (struct ezfs_inode *)((*p)->b_data + (ino * sizeof(struct ezfs_inode)));
+	return (struct ezfs_inode *)(*p)->b_data + ino;//(off * sizeof(struct ezfs_inode));
+	//return (struct ezfs_inode *)((*p)->b_data + ino);//(ino * sizeof(struct ezfs_inode)));
+	//return (struct ezfs_inode *)((*p)->b_data + (ino * sizeof(struct ezfs_inode)));
 }
 
 static int ezfs_write_inode(struct inode *inode, struct writeback_control *wbc)
@@ -548,7 +550,7 @@ static int ezfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 	struct ezfs_inode *di;
 	struct buffer_head *bh;
 	struct super_block *sb = inode->i_sb;
-	//	struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info;
+       	struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info;
 	struct ezfs_inode *e_inode = inode->i_private;
 	int err = 0;
 
@@ -569,6 +571,7 @@ static int ezfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 	di->nblocks = (inode->i_blocks)/8;
 
 	mark_buffer_dirty(bh);
+	mark_buffer_dirty(fsi->i_store_bh);
 	if (wbc->sync_mode == WB_SYNC_ALL) {
 		sync_dirty_buffer(bh);
 		if (buffer_req(bh) && !buffer_uptodate(bh))
@@ -686,14 +689,14 @@ static int myez_fill_super(struct super_block *s, struct fs_context *fc)
 	printk(KERN_INFO "Entered Super  --- Loading module... Hello World!\n");
 	sb_set_blocksize(s, MYEZ_BLOCK_SIZE);
 
-	sbh = sb_bread(s, 0);
+	sbh = sb_bread(s, EZFS_SUPERBLOCK_DATABLOCK_NUMBER);
 	
 	if (!sbh)
 		goto out;
 
 	fsi->sb_bh = sbh;	
 
-	sbh2 = sb_bread(s, 1);
+	sbh2 = sb_bread(s, EZFS_INODE_STORE_DATABLOCK_NUMBER);
 	fsi->i_store_bh = sbh2;
 
 	printk(KERN_INFO "super sbh is done  --- Loading module... Hello World!\n");
