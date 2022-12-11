@@ -537,6 +537,7 @@ static int myez_unlink(struct inode *dir, struct dentry *dentry)
 	struct inode *inode = d_inode(dentry);
 	
 	printk(KERN_INFO "[MYEZ UNlink inode]  --- Loading module... Hello World!\n");
+	mutex_lock(&myezfs_lock);
 	bh = ezfs_find_entry(dir, &dentry->d_name, &de);
 	
 	if (!bh) {
@@ -556,6 +557,7 @@ static int myez_unlink(struct inode *dir, struct dentry *dentry)
 	inode_dec_link_count(inode);
 	
 	brelse(bh);
+	mutex_unlock(&myezfs_lock);
 	return 0;
 	
 }
@@ -667,24 +669,24 @@ static void myez_evict_inode(struct inode *inode)
 	truncate_inode_pages_final(&inode->i_data);
 	clear_inode(inode);
 	
-	// if (inode->i_nlink)
-	// 	return;
+	if (inode->i_nlink)
+		return;
 		
-	// di = find_inode(s, inode->i_ino, &bh);
-	// if (IS_ERR(di))
-	// 	return;
+	di = find_inode(s, inode->i_ino, &bh);
+	if (IS_ERR(di))
+		return;
 
-	// mutex_lock(&myezfs_lock);
-	// /* clear on-disk inode */
-	// memset(di, 0, sizeof(struct ezfs_inode));
-	// mark_buffer_dirty(bh);
-	// brelse(bh);
+	mutex_lock(&myezfs_lock);
+	/* clear on-disk inode */
+	memset(di, 0, sizeof(struct ezfs_inode));
+	mark_buffer_dirty(bh);
+	brelse(bh);
 	
-	// CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), ino);
+	CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), ino);
 	
-	// for (i = 0; i < n_blocks; i++)
-	// 	CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), block_start+i);
-	// mutex_unlock(&myezfs_lock);
+	for (i = 0; i < n_blocks; i++)
+		CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), block_start+i);
+	mutex_unlock(&myezfs_lock);
 }
 
 static const struct super_operations myez_sops = {
