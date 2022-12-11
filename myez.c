@@ -420,18 +420,18 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	int err, off;
 	unsigned long ino;
 
-	/*inode = new_inode(sb);
+	inode = new_inode(sb);
 	if (!inode)
 		return -ENOMEM;
 
-	//mutex_lock(&myezfs_lock);
+	mutex_lock(&myezfs_lock);
 
 	// TODO: how do we get this
 	ino = inode->i_ino;
 
 	ino = find_first_zero_bit((const long unsigned int *)(((struct ezfs_super_block *)fsi->sb_bh->b_data)->free_inodes), EZFS_MAX_INODES);
 	if (ino >= EZFS_MAX_INODES) {
-		//mutex_unlock(&myezfs_lock);
+		mutex_unlock(&myezfs_lock);
 		return -ENOSPC;
 	}
 
@@ -452,14 +452,14 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (err) {
 		drop_nlink(inode);
 		mark_inode_dirty(inode);
-		//mutex_unlock(&myezfs_lock);
+		mutex_unlock(&myezfs_lock);
 		iput(inode);
 		return err;
 	}
 
-	//mutex_unlock(&myezfs_lock);
+	mutex_unlock(&myezfs_lock);
 	d_instantiate(dentry, inode);
-	return 0;*/
+	return 0;
 
 	// OLD IMPLEMENTATION BELOW
 
