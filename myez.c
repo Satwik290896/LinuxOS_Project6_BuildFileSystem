@@ -562,6 +562,63 @@ static int myez_unlink(struct inode *dir, struct dentry *dentry)
 	
 }
 
+static int myez_rename(struct inode *old_dir, struct dentry *old_dentry,
+		      struct inode *new_dir, struct dentry *new_dentry,
+		      unsigned int flags)
+{
+	struct inode *old_inode, *new_inode;
+	struct buffer_head *old_bh, *new_bh;
+	struct bfs_dirent *old_de, *new_de;
+	struct bfs_sb_info *info;
+	int error = -ENOENT;
+
+	if (flags & ~RENAME_NOREPLACE)
+		return -EINVAL;
+
+	old_bh = new_bh = NULL;
+	old_inode = d_inode(old_dentry);
+	if (S_ISDIR(old_inode->i_mode))
+		return -EINVAL;
+
+	info = BFS_SB(old_inode->i_sb);
+
+	mutex_lock(&info->bfs_lock);
+	old_bh = bfs_find_entry(old_dir, &old_dentry->d_name, &old_de);
+
+	if (!old_bh || (le16_to_cpu(old_de->ino) != old_inode->i_ino))
+		goto end_rename;
+
+	error = -EPERM;
+	new_inode = d_inode(new_dentry);
+	new_bh = bfs_find_entry(new_dir, &new_dentry->d_name, &new_de);
+
+	if (new_bh && !new_inode) {
+		brelse(new_bh);
+		new_bh = NULL;
+	}
+	if (!new_bh) {
+		error = bfs_add_entry(new_dir, &new_dentry->d_name,
+					old_inode->i_ino);
+		if (error)
+			goto end_rename;
+	}
+	old_de->ino = 0;
+	old_dir->i_ctime = old_dir->i_mtime = current_time(old_dir);
+	mark_inode_dirty(old_dir);
+	if (new_inode) {
+		new_inode->i_ctime = current_time(new_inode);
+		inode_dec_link_count(new_inode);
+	}
+	mark_buffer_dirty_inode(old_bh, old_dir);
+	error = 0;
+
+end_rename:
+	mutex_unlock(&info->bfs_lock);
+	brelse(old_bh);
+	brelse(new_bh);
+	return error;
+}
+
 static const struct inode_operations myez_dir_inops = {
 	.create		= myez_create,
 	.lookup		= myez_lookup,
@@ -571,7 +628,7 @@ static const struct inode_operations myez_dir_inops = {
 	.mkdir		= myez_mkdir,
 	//.rmdir		= simple_rmdir,
 	//.mknod		= ramfs_mknod,
-	//.rename		= simple_rename,
+	.rename		= myez_rename,
 };
 
 const struct file_operations myez_dir_operations = {
