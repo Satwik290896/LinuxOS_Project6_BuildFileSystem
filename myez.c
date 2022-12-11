@@ -420,7 +420,7 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	int err, off;
 	unsigned long ino;
 
-	inode = new_inode(sb);
+	/*inode = new_inode(sb);
 	if (!inode)
 		return -ENOMEM;
 
@@ -459,7 +459,7 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	//mutex_unlock(&myezfs_lock);
 	d_instantiate(dentry, inode);
-	return 0;
+	return 0;*/
 
 	// OLD IMPLEMENTATION BELOW
 
@@ -502,12 +502,25 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	empty_sblock_no += 1;
 	empty_inode_no += 1;
 
-	insert_inode_hash(inode);
+	//insert_inode_hash(inode);
         mark_inode_dirty(inode);
 
+	mutex_unlock(&myezfs_lock);
         /*Need to Implement more*/
 
-        mutex_unlock(&myezfs_lock);
+	err = myez_add_entry(dir, &dentry->d_name, inode->i_ino);
+	if (err) {
+		drop_nlink(inode);
+		mark_inode_dirty(inode);
+		//mutex_unlock(&myezfs_lock);
+		iput(inode);
+		return err;
+	}
+
+	//mutex_unlock(&myezfs_lock);
+	d_instantiate(dentry, inode);
+
+        
         brelse(bh);
 
 	return 0;
