@@ -788,11 +788,13 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	inode->i_mode |= S_IFDIR;
 	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
 	inode->i_blocks = 1;
+	inode->i_size = EZFS_BLOCK_SIZE;
 	inode->i_op = &myez_dir_inops;
 	inode->i_fop = &myez_dir_operations;
 	inode->i_ino = empty_inode_no;
 	inode->i_mapping->a_ops = &myez_aops;
 	inode->i_private = di;
+	set_nlink(inode, 2);
 
 	di->data_block_number = empty_sblock_no;
 
@@ -802,7 +804,9 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	empty_sblock_no += 1;
 	empty_inode_no += 1;
 
+	set_nlink(dir, dir->i_nlink + 1);
 	mark_inode_dirty(inode);
+	mark_inode_dirty(dir);
 	err = myez_add_entry(dir, &dentry->d_name, inode->i_ino);
 	if (err) {
 		drop_nlink(inode);
@@ -812,8 +816,6 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		brelse(bh);
 		return err;
 	}
-
-	/* TODO: need to update link counts! */
 
 	mutex_unlock(&myezfs_lock);
 	mark_buffer_dirty(bh);
