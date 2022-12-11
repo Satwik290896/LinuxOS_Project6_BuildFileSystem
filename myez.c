@@ -420,7 +420,7 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	int err, off;
 	unsigned long ino;
 
-	inode = new_inode(sb);
+	/*inode = new_inode(sb);
 	if (!inode)
 		return -ENOMEM;
 
@@ -459,7 +459,8 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	mutex_unlock(&myezfs_lock);
 	d_instantiate(dentry, inode);
-	return 0;
+	return 0;*/
+	(void) ino;
 
 	// OLD IMPLEMENTATION BELOW
 
