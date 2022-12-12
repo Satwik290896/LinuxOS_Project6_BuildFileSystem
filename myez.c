@@ -41,13 +41,10 @@
 umode_t g_mode;
 struct ezfs_inode *temp_e_ino;
 
-// TODO: need to replace these values with find_first_zero_bit, as they will not be saved
-// between reboots/module installation
-uint64_t empty_sblock_no = 16;
 struct mutex myezfs_lock;
 
 struct myez_sb_info {
-	unsigned long si_blocks;
+ 	unsigned long si_blocks;
 	unsigned long si_freeb;
 	unsigned long si_freei;
 	unsigned long si_lf_eblk;
@@ -55,7 +52,6 @@ struct myez_sb_info {
 	//DECLARE_BITMAP(si_imap, MYEZ_MAX_LASTI+1);
 	struct mutex myez_lock;
 };
-
 
 struct myez_super_block {
 	__le32 s_magic;
@@ -108,10 +104,17 @@ static int myez_get_block(struct inode *inode, sector_t block,
 	uint64_t n_blocks = (size/block_size);
 	
 	uint64_t phys = block + block_start;
-	int i=0;
-	
+	int i = 0, j = 0;
+	unsigned int empty_sblock;
+	unsigned int set_from;
+
 	(void)err;
 	(void)de;
+
+	empty_sblock = find_first_zero_bit((const long unsigned int *)(((struct ezfs_super_block *)fsi->sb_bh->b_data)->free_data_blocks), EZFS_MAX_DATA_BLKS);
+
+	if (empty_sblock >= EZFS_MAX_DATA_BLKS)
+		return -ENOSPC;
 
 	printk(KERN_INFO "MYEZ GET BLOCK\n");
 	if (size % block_size != 0)
@@ -145,35 +148,41 @@ static int myez_get_block(struct inode *inode, sector_t block,
 		SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), phys);
 		mark_inode_dirty(inode);
 		
-		if (phys >= empty_sblock_no) {
-			empty_sblock_no = phys + 1;
+		if (phys >= empty_sblock) {
+			// to match old behavior, we must set all bits between empty_sblock and phys
+			for (j = empty_sblock; j <= phys; j++)
+				SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), j);
+			empty_sblock = phys + 1;
 		}
-	}
-	else {
+	} else {
 		printk(KERN_INFO "[MYEZ LS3] Make Sure Writing file %llu %llu\n", block, phys);
 		/*Need to do Stuff*/
 		
-		if ((empty_sblock_no + ((inode->i_blocks)/8)) >= EZFS_MAX_DATA_BLKS + 2) {
+		if ((empty_sblock + ((inode->i_blocks)/8)) >= EZFS_MAX_DATA_BLKS + 2) {
 			mutex_unlock(&myezfs_lock);
 			return -ENOSPC;
-		}			
+		}
 		for (i = 0; i < (inode->i_blocks)/8; i++) {
-			if (myez_move_block(i, empty_sblock_no + i, sb)) {
+			if (myez_move_block(i, empty_sblock + i, sb)) {
 				mutex_unlock(&myezfs_lock);
 				return -EIO;
 			}
-			SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), empty_sblock_no + i);
+			SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), empty_sblock + i);
 		}
-		e_inode->data_block_number = empty_sblock_no;
-		empty_sblock_no += (inode->i_blocks)/8;
-		phys = empty_sblock_no;
+		e_inode->data_block_number = empty_sblock;
+		set_from = empty_sblock;
+		empty_sblock += (inode->i_blocks)/8;
+		for (j = set_from; j < empty_sblock; j++)
+			SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), j);
+		phys = empty_sblock;
+
 		SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), phys);
 		inode->i_blocks += 8;
 
 		mark_inode_dirty(inode);
 		map_bh(bh_result, sb, phys);
-		empty_sblock_no += 1;
-		
+		SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), empty_sblock);
+
 		mutex_unlock(&myezfs_lock);
 		return 0;
 	}
@@ -425,7 +434,7 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info;
 	int err, off;
 	unsigned long ino;
-	unsigned long empty_ino;
+	unsigned long empty_ino, empty_sblock;
 
 	/*inode = new_inode(sb);
 	if (!inode)
@@ -476,6 +485,11 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (empty_ino >= EZFS_MAX_INODES)
 		return -ENOSPC;
 
+	empty_sblock = find_first_zero_bit((const long unsigned int *)(((struct ezfs_super_block *)fsi->sb_bh->b_data)->free_data_blocks), EZFS_MAX_DATA_BLKS);
+
+	if (empty_sblock >= EZFS_MAX_DATA_BLKS)
+		return -ENOSPC;
+
 	/* bh = sb_bread(sb, EZFS_INODE_STORE_DATABLOCK_NUMBER); */
 	/* if (!bh) { */
 	/* 	//iget_failed(inode); */
@@ -508,7 +522,7 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	inode->i_private = di;
 	set_nlink(inode, 1);
 
-	di->data_block_number = empty_sblock_no;
+	di->data_block_number = empty_sblock;
 	di->mode = inode->i_mode;
 	di->uid = i_uid_read(inode);
 	di->gid = i_gid_read(inode);
@@ -520,9 +534,7 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	di->nblocks = (inode->i_blocks)/8;
 
 	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), empty_ino);
-	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), empty_sblock_no);
-
-	empty_sblock_no += 1;
+	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), empty_sblock);
 
 	//insert_inode_hash(inode);
         mark_inode_dirty(inode);
@@ -865,7 +877,7 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	struct super_block *sb = dir->i_sb;
 	struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info;
 	int err, off;
-	unsigned long empty_ino;
+	unsigned long empty_ino, empty_sblock;
 
 	/* bh = sb_bread(sb, EZFS_INODE_STORE_DATABLOCK_NUMBER); */
 	/* if (!bh) { */
@@ -879,6 +891,13 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	empty_ino = find_first_zero_bit((const long unsigned int *)(((struct ezfs_super_block *)fsi->sb_bh->b_data)->free_inodes), EZFS_MAX_INODES);
 
 	if (empty_ino >= EZFS_MAX_INODES) {
+		mutex_unlock(&myezfs_lock);
+		return -ENOSPC;
+	}
+
+	empty_sblock = find_first_zero_bit((const long unsigned int *)(((struct ezfs_super_block *)fsi->sb_bh->b_data)->free_data_blocks), EZFS_MAX_DATA_BLKS);
+
+	if (empty_sblock >= EZFS_MAX_DATA_BLKS) {
 		mutex_unlock(&myezfs_lock);
 		return -ENOSPC;
 	}
@@ -905,7 +924,7 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	inode->i_private = di;
 	set_nlink(inode, 2);
 
-	di->data_block_number = empty_sblock_no;
+	di->data_block_number = empty_sblock;
 	di->mode = inode->i_mode;
 	di->uid = i_uid_read(inode);
 	di->gid = i_gid_read(inode);
@@ -919,9 +938,7 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	printk(KERN_INFO "[MYEZ myez_mkdir] SBlock %lld 0x%d\n", di->data_block_number, inode->i_mode);
 
 	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), empty_ino);
-	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), empty_sblock_no);
-
-	empty_sblock_no += 1;
+	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), empty_sblock);
 
 	set_nlink(dir, dir->i_nlink + 1);
 	
