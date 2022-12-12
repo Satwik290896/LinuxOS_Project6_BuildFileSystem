@@ -112,6 +112,7 @@ static int myez_get_block(struct inode *inode, sector_t block,
 	(void)err;
 	(void)de;
 
+	printk(KERN_INFO "MYEZ GET BLOCK\n");
 	if (size % block_size != 0)
 		n_blocks += 1;
 	
@@ -334,9 +335,9 @@ static struct buffer_head *ezfs_find_entry(struct inode *dir,
 	while (offset < dir->i_size) {
 		de = (struct ezfs_dir_entry *)(bh->b_data + offset);
 		offset += sizeof(struct ezfs_dir_entry);
-		printk(KERN_INFO "Entered ez_find_entry [LS 3]  --- Loading module... Hello World!: %s\n", de->filename);
+		//printk(KERN_INFO "Entered ez_find_entry [LS 3]  --- Loading module... Hello World!: %s\n", de->filename);
 		if (de->active == 1) {
-		printk(KERN_INFO "Entered ez_find_entry [LS 4]  --- Loading module... Hello World!: %s\n", de->filename);
+		//printk(KERN_INFO "Entered ez_find_entry [LS 4]  --- Loading module... Hello World!: %s\n", de->filename);
 		if (!(memcmp(name, de->filename, namelen))) {
 			printk(KERN_INFO "Entered ez_find_entry [LS 5]  --- Loading module... Hello World!: %s\n", name);
 			*res_dir = de;
@@ -357,7 +358,7 @@ static struct dentry *myez_lookup(struct inode *dir, struct dentry *dentry,
 	struct ezfs_dir_entry *de;
 	//	struct ezfs_sb_buffer_heads *fsi = dir->i_sb->s_fs_info;
 
-	printk(KERN_INFO "Entered LOOKUP [LS 2]  --- Loading module... Hello World!\n");
+	//printk(KERN_INFO "Entered LOOKUP [LS 2]  --- Loading module... Hello World!\n");
 
 	if (dentry->d_name.len > EZFS_FILENAME_BUF_SIZE)
 		return ERR_PTR(-ENAMETOOLONG);
@@ -679,6 +680,7 @@ static int ezfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 	printk(KERN_INFO "IN EZFS_WRITE_INODE : found inode\n");
 
 	// lock
+	printk(KERN_INFO "[MYEZ GET INODE] From Buffer %lld %d\n", inode->i_ino, inode->i_mode);
 	di->mode = inode->i_mode;
 	di->uid = i_uid_read(inode);
 	di->gid = i_gid_read(inode);
@@ -710,10 +712,10 @@ static int ezfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 	printk(KERN_INFO "[EZFS INODE Disk writeup]  --- Loading module... Hello World!\n");
 
 	//	mark_inode_dirty(inode);
-	e_inode->nblocks = (inode->i_blocks)/8;
+	/*c->nblocks = (inode->i_blocks)/8;
 	e_inode->i_atime = inode->i_atime;
 	e_inode->i_mtime = inode->i_mtime;
-	e_inode->i_ctime = inode->i_ctime;
+	e_inode->i_ctime = inode->i_ctime;*/
 	
 	return 0;
 }
@@ -721,6 +723,7 @@ static int ezfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 
 static void myez_put_super(struct super_block *s)
 {
+	printk(KERN_INFO "MYEZ PUT SUPER\n");
 	mutex_destroy(&myezfs_lock);
 	//s->s_fs_info = NULL;
 }
@@ -795,6 +798,7 @@ struct inode *myez_get_inode(struct super_block *sb,
 	off = ino - EZFS_ROOT_INODE_NUMBER;
 	di = (struct ezfs_inode *)fsi->i_store_bh->b_data + off;//(off * sizeof(struct ezfs_inode));
 
+	printk(KERN_INFO "[MYEZ GET INODE] From Buffer %lld 0x%lx %lld\n", ino, di->mode, di->data_block_number);
 	inode->i_mode = di->mode;
 	if (S_ISDIR(inode->i_mode)) {
 		// dir
@@ -820,6 +824,7 @@ struct inode *myez_get_inode(struct super_block *sb,
 	inode->i_ctime = di->i_ctime;
 
 	inode->i_private = di;
+	//mark_inode_dirty(inode);
 	brelse(bh);
 
 	return inode;
@@ -873,6 +878,17 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	set_nlink(inode, 2);
 
 	di->data_block_number = empty_sblock_no;
+	di->mode = inode->i_mode;
+	di->uid = i_uid_read(inode);
+	di->gid = i_gid_read(inode);
+	di->nlink = inode->i_nlink;
+	di->i_atime = inode->i_atime;
+	di->i_mtime = inode->i_mtime;
+	di->i_ctime = inode->i_ctime;
+	di->file_size = inode->i_size;
+	di->nblocks = (inode->i_blocks)/8;
+	
+	printk(KERN_INFO "[MYEZ myez_mkdir] SBlock %lld 0x%lx\n", di->data_block_number, inode->i_mode);
 
 	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), empty_inode_no);
 	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), empty_sblock_no);
@@ -881,9 +897,11 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	empty_inode_no += 1;
 
 	set_nlink(dir, dir->i_nlink + 1);
+	
+	printk(KERN_INFO "[MYEZ myez_mkdir] New Directory Created %s %d\n", dentry->d_name.name, inode->i_ino);
 	mark_inode_dirty(inode);
+	mark_inode_dirty(dir);
 	mark_buffer_dirty(bh);
-
 	err = myez_add_entry(dir, &dentry->d_name, inode->i_ino);
 	if (err) {
 		drop_nlink(inode);
@@ -927,8 +945,12 @@ static int has_children(struct super_block *sb, struct inode *dir)
 
 static int myez_rmdir(struct inode *dir, struct dentry *dentry)
 {
+	struct super_block *s = dir->i_sb;
+	struct ezfs_sb_buffer_heads *fsi = s->s_fs_info;
 	struct buffer_head *bh;
+	struct buffer_head *bh2;
 	struct ezfs_dir_entry *de;
+	struct ezfs_inode *einode;
 	struct inode *inode = d_inode(dentry);
 	
 	bh = ezfs_find_entry(dir, &dentry->d_name, &de);
@@ -946,12 +968,20 @@ static int myez_rmdir(struct inode *dir, struct dentry *dentry)
 		return -ENOTEMPTY;
 	}
 
+	einode = find_inode(s, de->inode_no, &bh2);	
+	if (IS_ERR(einode)) {
+		return PTR_ERR(einode);
+	}
+	
 	if (!inode->i_nlink)
 		drop_nlink(inode);
 
 	simple_unlink(dir, dentry);
 	drop_nlink(dir);
 
+	CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), de->inode_no);
+	memset(einode, 0, sizeof(struct ezfs_inode));
+	
 	de->inode_no = 0;
 	de->active = 0;
 	mark_buffer_dirty_inode(bh, dir);
@@ -960,6 +990,8 @@ static int myez_rmdir(struct inode *dir, struct dentry *dentry)
 	inode->i_ctime = dir->i_ctime;
 	inode_dec_link_count(inode);
 	
+	mark_buffer_dirty(bh2);
+	brelse(bh2);
 	brelse(bh);
 
 	return 0;
@@ -1165,12 +1197,14 @@ static int myez_get_tree(struct fs_context *fc)
 {
 	int ret = -ENOPROTOOPT;
 
+	printk(KERN_INFO "MYEZ GET TREE\n");
 	ret = get_tree_bdev(fc, myez_fill_super);
 	return ret;
 }
 
 static void myez_free_fc(struct fs_context *fc)
 {
+	printk(KERN_INFO "MYEZ FREE FC\n");
 	kfree(fc->s_fs_info);
 }
 
@@ -1202,6 +1236,9 @@ void myez_kill_sb(struct super_block *sb)
 {
 	struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info;
 
+	printk(KERN_INFO "myez_kill_sb\n");
+	mark_buffer_dirty(fsi->sb_bh);
+	mark_buffer_dirty(fsi->i_store_bh);
 	brelse(fsi->sb_bh);
 	brelse(fsi->i_store_bh);
 	kfree(sb->s_fs_info);
