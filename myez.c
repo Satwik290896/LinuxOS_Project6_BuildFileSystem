@@ -335,7 +335,7 @@ static struct buffer_head *ezfs_find_entry(struct inode *dir,
 	while (offset < dir->i_size) {
 		de = (struct ezfs_dir_entry *)(bh->b_data + offset);
 		offset += sizeof(struct ezfs_dir_entry);
-		//printk(KERN_INFO "Entered ez_find_entry [LS 3]  --- Loading module... Hello World!: %s\n", de->filename);
+		printk(KERN_INFO "Entered ez_find_entry [LS 3]  --- Loading module... Hello World!: %s %d\n", de->filename, dir->i_size);
 		if (de->active == 1) {
 		//printk(KERN_INFO "Entered ez_find_entry [LS 4]  --- Loading module... Hello World!: %s\n", de->filename);
 		if (!(memcmp(name, de->filename, namelen))) {
@@ -574,8 +574,8 @@ static int myez_unlink(struct inode *dir, struct dentry *dentry)
 	mark_inode_dirty(dir);
 	inode->i_ctime = dir->i_ctime;
 
-	//inode_dec_link_count(inode);
-	set_nlink(inode, inode->i_nlink - 1);
+	inode_dec_link_count(inode);
+	//set_nlink(inode, inode->i_nlink - 1);
 	//mutex_unlock(&myezfs_lock);
 	brelse(bh);
 	
@@ -768,6 +768,7 @@ static void myez_evict_inode(struct inode *inode)
 
 	/*Clearing everything here itself*/
 	clear_files(inode->i_sb, inode);
+	invalidate_inode_buffers(inode);
 	clear_inode(inode);
 	
 
@@ -1009,7 +1010,9 @@ static int clear_files(struct super_block *s, struct inode *inode)
 	mutex_lock(&myezfs_lock);
 	CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), inode->i_ino);
 	memset(einode, 0, sizeof(struct ezfs_inode));
-	memset(inode, 0, sizeof(*inode));
+
+	//memset(inode, 0, sizeof(inode));
+
 	mutex_unlock(&myezfs_lock);
 	return 0;
 }
@@ -1119,11 +1122,13 @@ static int clear_empty_directory(struct super_block *s, struct inode *inode)
 	mutex_lock(&myezfs_lock);
 	CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), block_no);
 	CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), inode->i_ino);
-	memset(einode, 0, sizeof(struct ezfs_inode));
+	//memset(einode, 0, sizeof(struct ezfs_inode));
 	
 	de = (struct ezfs_dir_entry *)(bh->b_data);
 	memset(de, 0, 4096);
-	memset(inode, 0, sizeof(*inode));
+
+	//memset(inode, 0, sizeof(inode));
+
 	mutex_unlock(&myezfs_lock);
 	
 	brelse(bh);
