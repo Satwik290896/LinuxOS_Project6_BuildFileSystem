@@ -539,7 +539,8 @@ static int myez_unlink(struct inode *dir, struct dentry *dentry)
 	struct ezfs_dir_entry *de;
 	struct inode *inode = d_inode(dentry);
 	
-	printk(KERN_INFO "[MYEZ UNlink inode]  --- Loading module... Hello World!\n");
+	printk(KERN_INFO "[MYEZ_UNLINK]  --- Loading module... Hello World!\n");
+	mutex_lock(&myezfs_lock);
 	bh = ezfs_find_entry(dir, &dentry->d_name, &de);
 	
 	if (!bh) {
@@ -559,8 +560,68 @@ static int myez_unlink(struct inode *dir, struct dentry *dentry)
 	inode_dec_link_count(inode);
 	
 	brelse(bh);
+	mutex_unlock(&myezfs_lock);
 	return 0;
 	
+}
+
+static int myez_rename(struct inode *old_dir, struct dentry *old_dentry,
+		      struct inode *new_dir, struct dentry *new_dentry,
+		      unsigned int flags)
+{
+	struct inode *old_inode, *new_inode;
+	struct buffer_head *old_bh, *new_bh;
+	struct ezfs_dir_entry *old_de, *new_de;
+	struct super_block *sb;
+	struct myez_sb_info *info;
+	int error = -ENOENT;
+
+	printk(KERN_INFO "[MYEZ_RENAME]  --- Loading module... Hello World!\n");
+	if (flags & ~RENAME_NOREPLACE)
+		return -EINVAL;
+
+	old_bh = new_bh = NULL;
+	old_inode = d_inode(old_dentry);
+	if (S_ISDIR(old_inode->i_mode))
+		return -EINVAL;
+	sb = old_inode->i_sb;
+	info = sb->s_fs_info;
+
+	mutex_lock(&myezfs_lock);
+	old_bh = ezfs_find_entry(old_dir, &old_dentry->d_name, &old_de);
+
+	if (!old_bh)
+		goto end_rename;
+
+	error = -EPERM;
+	new_inode = d_inode(new_dentry);
+	new_bh = ezfs_find_entry(new_dir, &new_dentry->d_name, &new_de);
+
+	if (new_bh && !new_inode) {
+		brelse(new_bh);
+		new_bh = NULL;
+	}
+	if (!new_bh) {
+		error = myez_add_entry(new_dir, &new_dentry->d_name,
+					old_inode->i_ino);
+		if (error)
+			goto end_rename;
+	}
+	old_de->inode_no = 0;
+	old_dir->i_ctime = old_dir->i_mtime = current_time(old_dir);
+	mark_inode_dirty(old_dir);
+	if (new_inode) {
+		new_inode->i_ctime = current_time(new_inode);
+		inode_dec_link_count(new_inode);
+	}
+	mark_buffer_dirty_inode(old_bh, old_dir);
+	error = 0;
+
+end_rename:
+	mutex_unlock(&myezfs_lock);
+	brelse(old_bh);
+	brelse(new_bh);
+	return error;
 }
 
 static const struct inode_operations myez_dir_inops = {
@@ -572,7 +633,7 @@ static const struct inode_operations myez_dir_inops = {
 	.mkdir		= myez_mkdir,
 	.rmdir		= myez_rmdir,
 	//.mknod		= ramfs_mknod,
-	//.rename		= simple_rename,
+	.rename		= myez_rename,
 };
 
 const struct file_operations myez_dir_operations = {
@@ -601,7 +662,7 @@ static int ezfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 	struct ezfs_inode *di;
 	struct buffer_head *bh;
 	struct super_block *sb = inode->i_sb;
-       	struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info;
+    	struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info;
 	struct ezfs_inode *e_inode = inode->i_private;
 	int err = 0;
 
