@@ -12,6 +12,6 @@ Sai Satwik Vaddi
 
 cs4213:
 
-mkr2151: 3hrs,
+mkr2151: 14hrs, hmwk1 < hmwk2 < hmwk6 < hmwk4 < hmwk5 < hmwk3
 
 sv2665:
