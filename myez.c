@@ -748,15 +748,15 @@ static void myez_put_super(struct super_block *s)
 
 static void myez_evict_inode(struct inode *inode)
 {
-	unsigned long ino = inode->i_ino;
-	struct ezfs_inode *di;
-	struct buffer_head *bh;
-	struct super_block *s = inode->i_sb;
-	struct ezfs_sb_buffer_heads *fsi = s->s_fs_info;
-	struct ezfs_inode *e_inode = inode->i_private;
-	uint64_t block_start = e_inode->data_block_number;
-	unsigned long n_blocks = (inode->i_blocks)/8;
-	int i = 0;
+	/* unsigned long ino = inode->i_ino; */
+	/* struct ezfs_inode *di; */
+	/* struct buffer_head *bh; */
+	/* struct super_block *s = inode->i_sb; */
+	/* struct ezfs_sb_buffer_heads *fsi = s->s_fs_info; */
+	/* struct ezfs_inode *e_inode = inode->i_private; */
+	/* uint64_t block_start = e_inode->data_block_number; */
+	/* unsigned long n_blocks = (inode->i_blocks)/8; */
+	/* int i = 0; */
 	int nlink = inode->i_nlink;
 
 	printk(KERN_INFO "[MYEZ Evict inode]  --- Loading module... Hello World!\n");
@@ -976,7 +976,7 @@ static int clear_files(struct super_block *s, struct inode *inode)
 	struct buffer_head *bh;
 	unsigned long t_block = 0;
 	struct ezfs_dir_entry *de;
-	unsigned long temp_inode_no;
+	//unsigned long temp_inode_no;
 	unsigned long s_block_no;
 	unsigned long block_no;
 	struct ezfs_sb_buffer_heads *fsi = s->s_fs_info;
@@ -1009,7 +1009,7 @@ static int clear_files(struct super_block *s, struct inode *inode)
 	mutex_lock(&myezfs_lock);
 	CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), inode->i_ino);
 	memset(einode, 0, sizeof(struct ezfs_inode));
-	memset(inode, 0, sizeof(inode));
+	memset(inode, 0, sizeof(*inode));
 	mutex_unlock(&myezfs_lock);
 	return 0;
 }
@@ -1092,7 +1092,7 @@ static int clear_empty_directory(struct super_block *s, struct inode *inode)
 	struct buffer_head *bh;
 	unsigned long offset = 0;
 	struct ezfs_dir_entry *de;
-	unsigned long temp_inode_no;
+	//unsigned long temp_inode_no;
 	unsigned long block_no;
 	struct ezfs_sb_buffer_heads *fsi = s->s_fs_info;
 	struct ezfs_inode *einode = ((struct ezfs_inode *)inode->i_private);
@@ -1123,7 +1123,7 @@ static int clear_empty_directory(struct super_block *s, struct inode *inode)
 	
 	de = (struct ezfs_dir_entry *)(bh->b_data);
 	memset(de, 0, 4096);
-	memset(inode, 0, sizeof(inode));
+	memset(inode, 0, sizeof(*inode));
 	mutex_unlock(&myezfs_lock);
 	
 	brelse(bh);
@@ -1133,12 +1133,12 @@ static int clear_empty_directory(struct super_block *s, struct inode *inode)
 static int myez_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct super_block *s = dir->i_sb;
-	struct ezfs_sb_buffer_heads *fsi = s->s_fs_info;
+	//struct ezfs_sb_buffer_heads *fsi = s->s_fs_info;
 	struct buffer_head *bh;
-	struct buffer_head *bh2;
+	//struct buffer_head *bh2;
 	
 	struct ezfs_dir_entry *de;
-	struct ezfs_inode *einode;
+	//struct ezfs_inode *einode;
 	struct inode *inode = d_inode(dentry);
 	bool ret_clear = 0;
 	
