@@ -490,18 +490,31 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	}
 	off = empty_inode_no - EZFS_ROOT_INODE_NUMBER;
 	//	di = (struct ezfs_inode *)bh->b_data + off;//(off * sizeof(struct ezfs_inode));
-	di = (struct ezfs_inode *)fsi->i_store_bh + off;
+	di = (struct ezfs_inode *)fsi->i_store_bh->b_data + off;
 
 	inode_init_owner(inode, dir, mode);
+	inode->i_mode = mode;
+	inode->i_mode |= S_IFREG;
 	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
 	inode->i_blocks = 0;
+	inode->i_size = 0;
 	inode->i_op = &myez_file_inode_operations;
 	inode->i_fop = &myez_file_operations;
 	inode->i_ino = empty_inode_no;
 	inode->i_mapping->a_ops = &myez_aops;
 	inode->i_private = di;
+	set_nlink(inode, 1);
 
 	di->data_block_number = empty_sblock_no;
+	di->mode = inode->i_mode;
+	di->uid = i_uid_read(inode);
+	di->gid = i_gid_read(inode);
+	di->nlink = 1;
+	di->i_atime = inode->i_atime;
+	di->i_mtime = inode->i_mtime;
+	di->i_ctime = inode->i_ctime;
+	di->file_size = inode->i_size;
+	di->nblocks = (inode->i_blocks)/8;
 
 	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), empty_inode_no);
 	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), empty_sblock_no);
@@ -511,9 +524,10 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	//insert_inode_hash(inode);
         mark_inode_dirty(inode);
+	mark_inode_dirty(dir);
 	mark_buffer_dirty(bh);
 
-	mutex_unlock(&myezfs_lock);
+	//	mutex_unlock(&myezfs_lock);
         /*Need to Implement more*/
 	printk(KERN_INFO "IN EZFS_CREATE : MARKED!\n");
 
@@ -521,15 +535,14 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (err) {
 		drop_nlink(inode);
 		mark_inode_dirty(inode);
-		//mutex_unlock(&myezfs_lock);
+		mutex_unlock(&myezfs_lock);
 		printk(KERN_INFO "error in myez_create from add_entry : %d\n", err);
 		iput(inode);
 		return err;
 	}
 
-	//mutex_unlock(&myezfs_lock);
+	mutex_unlock(&myezfs_lock);
 	d_instantiate(dentry, inode);
-
 	return 0;
 }
 
