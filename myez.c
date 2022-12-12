@@ -162,6 +162,7 @@ static int myez_get_block(struct inode *inode, sector_t block,
 		}
 		for (i = 0; i < (inode->i_blocks)/8; i++) {
 			if (myez_move_block(i, empty_sblock + i, sb)) {
+				mark_buffer_dirty(fsi->sb_bh);
 				mutex_unlock(&myezfs_lock);
 				return -EIO;
 			}
@@ -180,7 +181,7 @@ static int myez_get_block(struct inode *inode, sector_t block,
 		mark_inode_dirty(inode);
 		map_bh(bh_result, sb, phys);
 		SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), empty_sblock);
-
+		mark_buffer_dirty(fsi->sb_bh);
 		mutex_unlock(&myezfs_lock);
 		return 0;
 	}
@@ -538,6 +539,7 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
         mark_inode_dirty(inode);
 	mark_inode_dirty(dir);
 	mark_buffer_dirty(bh);
+	mark_buffer_dirty(fsi->sb_bh);
 
 	//	mutex_unlock(&myezfs_lock);
         /*Need to Implement more*/
@@ -789,6 +791,7 @@ static void myez_evict_inode(struct inode *inode)
 	for (i = 0; i < n_blocks; i++)
 		CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), block_start+i);
 	mutex_unlock(&myezfs_lock);
+	mark_buffer_dirty(fsi->sb_bh);
 }
 
 static const struct super_operations myez_sops = {
@@ -935,6 +938,7 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	mark_inode_dirty(inode);
 	mark_inode_dirty(dir);
 	mark_buffer_dirty(bh);
+	mark_buffer_dirty(fsi->sb_bh);
 	err = myez_add_entry(dir, &dentry->d_name, inode->i_ino);
 	if (err) {
 		drop_nlink(inode);
@@ -1022,6 +1026,7 @@ static int myez_rmdir(struct inode *dir, struct dentry *dentry)
 	inode_dec_link_count(inode);
 	
 	mark_buffer_dirty(bh2);
+	mark_buffer_dirty(fsi->sb_bh);
 	//brelse(bh2);
 	brelse(bh);
 
