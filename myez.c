@@ -827,151 +827,169 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	return 0;
 }
 
+static int has_children(struct super_block *sb, struct inode *dir)
+{
+	struct ezfs_inode *ez_inode = dir->i_private;
+	struct buffer_head *bh;
+	struct ezfs_dir_entry *de;
+	int i = 0;
+
+	bh = sb_bread(sb, ez_inode->data_block_number);
+	if (!bh)
+		return -EIO;
+
+	for (i = 0; i < EZFS_BLOCK_SIZE; i += sizeof(struct ezfs_dir_entry)) {
+		de = (struct ezfs_dir_entry *)(bh->b_data + i);
+		if (de->inode_no && (de->active == 1)) {
+			brelse(bh);
+			return 1;
+		}
+	}
+
+	brelse(bh);
+	return 0;
+}
+
 static int myez_rmdir(struct inode *dir, struct dentry *dentry)
 {
-	struct inode *inode; 
-	struct ezfs_inode *di, *del_inode;
-	struct buffer_head *bh, *pdbh, *dbh;
-	struct super_block *sb = dir->i_sb;
-	struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info;
+	struct buffer_head *bh;
 	struct ezfs_dir_entry *de;
-	int off, namelen, index;
-	int ino = -1;
-	int i = 0, j = 0;
-	char *block;
-
-	// steps:
-	// 1. if not empty, return error code
-	// 2. zero all data in block, mark block as free
-	// 3. zero all data in inode, mark inode as free
-	// 4. mark inode as dirty
-	// 6. mark inode bh as dirty
-	// 7. mark block bh as dirty
-	// TODO: need to remove dentry from its parent...
-
-	bh = sb_bread(sb, EZFS_INODE_STORE_DATABLOCK_NUMBER);
+	struct inode *inode = d_inode(dentry);
+	
+	bh = ezfs_find_entry(dir, &dentry->d_name, &de);
 	if (!bh)
-		return -EIO;
+		return 0;
 
-	// get the dir's inode
-	off = dir->i_ino - EZFS_ROOT_INODE_NUMBER;
-	di = (struct ezfs_inode *)bh->b_data + off;
-
-	pdbh = sb_bread(sb, di->data_block_number);
-	if (!pdbh) {
+	if (!S_ISDIR(inode->i_mode)) {
 		brelse(bh);
-		return -EIO;
-	}
-
-	// search through pdbh until we find something with same name; take its inode number
-	namelen = dentry->d_name.len;
-	for (i = 0; i < EZFS_BLOCK_SIZE; i += sizeof(struct ezfs_dir_entry)) {
-		de = (struct ezfs_dir_entry *)(pdbh->b_data + i);
-		for (j = 0; j < namelen; j++) {
-			if (dentry->d_name.name[j] != de->filename[j]) {
-				continue;
-			}
-		}
-		ino = de->inode_no;
-		index = i;
-		break;
-	}
-	if (ino == -1) {
-		brelse(bh);
-		brelse(pdbh);
 		return -ENOTDIR;
 	}
 
-	// get the object's inode
-	del_inode = (struct ezfs_inode *)bh->b_data + (ino - EZFS_ROOT_INODE_NUMBER);
-
-	// make sure its a directory
-	if (!S_ISDIR(del_inode->mode)) {
+	// check number of children on inode
+	if (!simple_empty(dentry) || (has_children(dir->i_sb, inode) == 1)) {
 		brelse(bh);
-		brelse(pdbh);
-		return -ENOTDIR;
+		return -ENOTEMPTY;
 	}
 
-	dbh = sb_bread(sb, del_inode->data_block_number);
-	if (!dbh) {
-		brelse(bh);
-		brelse(pdbh);
-		return -EIO;
-	}
+	if (!inode->i_nlink)
+		drop_nlink(inode);
 
-	// check that its data block is empty
-	for (i = 0; i < EZFS_BLOCK_SIZE; i += sizeof(struct ezfs_dir_entry)) {
-		de = (struct ezfs_dir_entry *)(dbh->b_data + i);
-		if (de->inode_no) {
-			brelse(dbh);
-			brelse(pdbh);
-			brelse(bh);
-			return -ENOTEMPTY;
-		}
-	}
+	simple_unlink(dir, dentry);
+	drop_nlink(dir);
 
-	// clear the object's data block
-	block = (char *)dbh->b_data;
-	memset(block, 0, EZFS_BLOCK_SIZE);
-	CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), del_inode->data_block_number);
-	mark_buffer_dirty(dbh);
-	brelse(dbh);
-
-	// clear its inode and mark it dirty
-	inode = iget_locked(sb, ino);
-	memset(del_inode, 0, sizeof(struct ezfs_inode));
-	CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), ino);
-	mark_inode_dirty(inode);
-
-	// remove the dentry using our index
-	de = (struct ezfs_dir_entry *)(pdbh->b_data + (index * sizeof(struct ezfs_dir_entry)));
-	memset(de, 0, sizeof(struct ezfs_dir_entry));
-	mark_buffer_dirty(pdbh);
-	brelse(pdbh);
-
-	// update other info on the parent dir
-	set_nlink(dir, dir->i_nlink - 1);
-	di->i_mtime = di->i_ctime = current_time(dir);
-	dir->i_mtime = dir->i_ctime = di->i_mtime;
+	de->inode_no = 0;
+	de->active = 0;
+	mark_buffer_dirty_inode(bh, dir);
+	dir->i_ctime = dir->i_mtime = current_time(dir);
 	mark_inode_dirty(dir);
-
-	mark_buffer_dirty(bh);
+	inode->i_ctime = dir->i_ctime;
+	inode_dec_link_count(inode);
+	
 	brelse(bh);
 
 	return 0;
 
+	/* struct inode *inode, *dinode; */
+	/* struct ezfs_inode *di, *del_inode; */
+	/* struct buffer_head *bh, *pdbh, *dbh; */
+	/* struct super_block *sb = dir->i_sb; */
+	/* struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info; */
+	/* struct ezfs_dir_entry *de; */
+	/* int off, namelen; */
+	/* int ino = -1; */
+	/* int index = 0; */
+	/* int i = 0; */
+	/* char *block; */
 
+	/* bh = sb_bread(sb, EZFS_INODE_STORE_DATABLOCK_NUMBER); */
+	/* if (!bh) */
+	/* 	return -EIO; */
 
+	/* // get the dir's inode */
+	/* off = dir->i_ino - EZFS_ROOT_INODE_NUMBER; */
+	/* di = (struct ezfs_inode *)bh->b_data + off; */
 
+	/* pdbh = sb_bread(sb, di->data_block_number); */
+	/* if (!pdbh) { */
+	/* 	brelse(bh); */
+	/* 	return -EIO; */
+	/* } */
 
+	/* // search through pdbh until we find something with same name; take its inode number */
+	/* namelen = dentry->d_name.len; */
+	/* for (i = 0; i < EZFS_BLOCK_SIZE; i += sizeof(struct ezfs_dir_entry)) { */
+	/* 	de = (struct ezfs_dir_entry *)(pdbh->b_data + i); */
+	/* 	if (!(memcmp(dentry->d_name.name, de->filename, namelen))) { */
+	/* 		ino = de->inode_no; */
+	/* 		break; */
+	/* 	} */
+	/* 	index++; */
+	/* } */
+	/* if (ino == -1) { */
+	/* 	brelse(bh); */
+	/* 	brelse(pdbh); */
+	/* 	return -ENOTDIR; */
+	/* } */
 
+	/* // get the object's inode */
+	/* dinode = iget_locked(sb, ino); */
+	/* del_inode = (struct ezfs_inode *)dinode->i_private; */
+	/* printk(KERN_INFO "doing rmdir: dir ino: %ul\n", ino); */
 
+	/* // make sure its a directory */
+	/* if (!S_ISDIR(del_inode->mode)) { */
+	/* 	brelse(bh); */
+	/* 	brelse(pdbh); */
+	/* 	return -ENOTDIR; */
+	/* } */
 
-	// OLD
+	/* dbh = sb_bread(sb, del_inode->data_block_number); */
+	/* if (!dbh) { */
+	/* 	brelse(bh); */
+	/* 	brelse(pdbh); */
+	/* 	return -EIO; */
+	/* } */
 
-	if (dir->i_ino == EZFS_ROOT_INODE_NUMBER)
-		return -EACCES;
+	/* // check that its data block is empty */
+	/* for (i = 0; i < EZFS_BLOCK_SIZE; i += sizeof(struct ezfs_dir_entry)) { */
+	/* 	de = (struct ezfs_dir_entry *)(dbh->b_data + i); */
+	/* 	if (de->inode_no) { */
+	/* 		brelse(dbh); */
+	/* 		brelse(pdbh); */
+	/* 		brelse(bh); */
+	/* 		return -ENOTEMPTY; */
+	/* 	} */
+	/* } */
 
-	bh = sb_bread(sb, EZFS_INODE_STORE_DATABLOCK_NUMBER);
-	if (!bh)
-		return -EIO;
+	/* // clear the object's data block */
+	/* block = (char *)dbh->b_data; */
+	/* memset(block, 0, EZFS_BLOCK_SIZE); */
+	/* CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), del_inode->data_block_number); */
+	/* mark_buffer_dirty(dbh); */
+	/* brelse(dbh); */
 
-	off = dir->i_ino - EZFS_ROOT_INODE_NUMBER;
-	di = (struct ezfs_inode *)bh->b_data + off;
+	/* // clear its inode and mark it dirty */
+	/* inode = iget_locked(sb, ino); */
+	/* memset(del_inode, 0, sizeof(struct ezfs_inode)); */
+	/* CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), ino); */
+	/* mark_inode_dirty(inode); */
 
-	dbh = sb_bread(sb, di->data_block_number);
-	if (!dbh) {
-		brelse(bh);
-		return -EIO;
-	}
+	/* // remove the dentry using our index */
+	/* de = (struct ezfs_dir_entry *)(pdbh->b_data + (index * sizeof(struct ezfs_dir_entry))); */
+	/* memset(de, 0, sizeof(struct ezfs_dir_entry)); */
+	/* mark_buffer_dirty(pdbh); */
+	/* brelse(pdbh); */
 
+	/* // update other info on the parent dir */
+	/* set_nlink(dir, dir->i_nlink - 1); */
+	/* di->i_mtime = di->i_ctime = current_time(dir); */
+	/* dir->i_mtime = dir->i_ctime = di->i_mtime; */
+	/* mark_inode_dirty(dir); */
 
+	/* mark_buffer_dirty(bh); */
+	/* brelse(bh); */
 
-
-
-	brelse(bh);
-	brelse(dbh);
-	return 0;
+	/* return 0; */
 }
 
 static int myez_fill_super(struct super_block *s, struct fs_context *fc)
