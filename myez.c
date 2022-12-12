@@ -473,19 +473,19 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (empty_inode_no >= EZFS_MAX_INODES)
 		return -ENOSPC;
 
-	bh = sb_bread(sb, EZFS_INODE_STORE_DATABLOCK_NUMBER);
-	if (!bh) {
-		//iget_failed(inode);
-		brelse(bh);
-		return -EIO;
-	}
+	/* bh = sb_bread(sb, EZFS_INODE_STORE_DATABLOCK_NUMBER); */
+	/* if (!bh) { */
+	/* 	//iget_failed(inode); */
+	/* 	brelse(bh); */
+	/* 	return -EIO; */
+	/* } */
+	bh = fsi->i_store_bh;
 
 	mutex_lock(&myezfs_lock);
 	inode = iget_locked(sb, empty_inode_no);
 
 	if (!inode) {
 		mutex_unlock(&myezfs_lock);
-		brelse(bh);
 		return -ENOMEM;
 	}
 	off = empty_inode_no - EZFS_ROOT_INODE_NUMBER;
@@ -524,15 +524,11 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 		//mutex_unlock(&myezfs_lock);
 		printk(KERN_INFO "error in myez_create from add_entry : %d\n", err);
 		iput(inode);
-		brelse(bh);
 		return err;
 	}
 
 	//mutex_unlock(&myezfs_lock);
 	d_instantiate(dentry, inode);
-
-        
-        brelse(bh);
 
 	return 0;
 }
@@ -561,8 +557,9 @@ static int myez_unlink(struct inode *dir, struct dentry *dentry)
 	dir->i_ctime = dir->i_mtime = current_time(dir);
 	mark_inode_dirty(dir);
 	inode->i_ctime = dir->i_ctime;
-	inode_dec_link_count(inode);
-	
+	//inode_dec_link_count(inode);
+	set_nlink(inode, inode->i_nlink - 1);
+
 	brelse(bh);
 	mutex_unlock(&myezfs_lock);
 	return 0;
@@ -650,9 +647,12 @@ const struct file_operations myez_dir_operations = {
 static struct ezfs_inode *find_inode(struct super_block *sb, uint64_t ino,
 				     struct buffer_head **p)
 {
+	struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info;
+
 	ino -= EZFS_ROOT_INODE_NUMBER;
 
-	*p = sb_bread(sb, EZFS_INODE_STORE_DATABLOCK_NUMBER);
+	//	*p = sb_bread(sb, EZFS_INODE_STORE_DATABLOCK_NUMBER);
+	*p = fsi->i_store_bh;
 	if (!*p)
 		return ERR_PTR(-EIO);
 
@@ -666,8 +666,8 @@ static int ezfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 	struct ezfs_inode *di;
 	struct buffer_head *bh;
 	struct super_block *sb = inode->i_sb;
-    	struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info;
-	struct ezfs_inode *e_inode = inode->i_private;
+	struct ezfs_sb_buffer_heads *fsi = sb->s_fs_info;
+	//struct ezfs_inode *e_inode = inode->i_private;
 	int err = 0;
 
 	printk(KERN_INFO "IN EZFS_WRITE_INODE : start\n");
@@ -680,7 +680,7 @@ static int ezfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 	printk(KERN_INFO "IN EZFS_WRITE_INODE : found inode\n");
 
 	// lock
-	printk(KERN_INFO "[MYEZ GET INODE] From Buffer %lld %d\n", inode->i_ino, inode->i_mode);
+	printk(KERN_INFO "[MYEZ GET INODE] From Buffer %lu %d\n", inode->i_ino, inode->i_mode);
 	di->mode = inode->i_mode;
 	di->uid = i_uid_read(inode);
 	di->gid = i_gid_read(inode);
@@ -701,7 +701,7 @@ static int ezfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 	/* 	if (buffer_req(bh) && !buffer_uptodate(bh)) */
 	/* 		err = -EIO; */
 	/* } */
-	brelse(bh);
+	//brelse(bh);
 	// unlock
 	return err;
 
@@ -739,15 +739,16 @@ static void myez_evict_inode(struct inode *inode)
 	uint64_t block_start = e_inode->data_block_number;
 	unsigned long n_blocks = (inode->i_blocks)/8;
 	int i = 0;
-	
+	int nlink = inode->i_nlink;
+
 	printk(KERN_INFO "[MYEZ Evict inode]  --- Loading module... Hello World!\n");
 	truncate_inode_pages_final(&inode->i_data);
 	clear_inode(inode);
 	
-	if (inode->i_nlink)
+	if (nlink)
 		return;
 		
-	di = find_inode(s, inode->i_ino, &bh);
+	di = find_inode(s, ino, &bh);
 	if (IS_ERR(di))
 		return;
 
@@ -755,7 +756,7 @@ static void myez_evict_inode(struct inode *inode)
 	/* clear on-disk inode */
 	memset(di, 0, sizeof(struct ezfs_inode));
 	mark_buffer_dirty(bh);
-	brelse(bh);
+	//brelse(bh);
 	
 	CLEARBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), ino);
 	
@@ -789,16 +790,18 @@ struct inode *myez_get_inode(struct super_block *sb,
 		return inode;
 		
 	
-	bh = sb_bread(inode->i_sb, EZFS_INODE_STORE_DATABLOCK_NUMBER);
-	if (!bh) {
-		iget_failed(inode);
-		brelse(bh);
-		return ERR_PTR(-EIO);
-	}
+	/* bh = sb_bread(inode->i_sb, EZFS_INODE_STORE_DATABLOCK_NUMBER); */
+	/* if (!bh) { */
+	/* 	iget_failed(inode); */
+	/* 	brelse(bh); */
+	/* 	return ERR_PTR(-EIO); */
+	/* } */
+
+	bh = fsi->i_store_bh;
 	off = ino - EZFS_ROOT_INODE_NUMBER;
 	di = (struct ezfs_inode *)fsi->i_store_bh->b_data + off;//(off * sizeof(struct ezfs_inode));
 
-	printk(KERN_INFO "[MYEZ GET INODE] From Buffer %lld 0x%lx %lld\n", ino, di->mode, di->data_block_number);
+	printk(KERN_INFO "[MYEZ GET INODE] From Buffer %lu 0x%x %lld\n", ino, di->mode, di->data_block_number);
 	inode->i_mode = di->mode;
 	if (S_ISDIR(inode->i_mode)) {
 		// dir
@@ -825,7 +828,6 @@ struct inode *myez_get_inode(struct super_block *sb,
 
 	inode->i_private = di;
 	//mark_inode_dirty(inode);
-	brelse(bh);
 
 	return inode;
 }
@@ -840,24 +842,23 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	int err, off;
 	//unsigned long ino;
 
-	bh = sb_bread(sb, EZFS_INODE_STORE_DATABLOCK_NUMBER);
-	if (!bh) {
-		return -EIO;
-	}
+	/* bh = sb_bread(sb, EZFS_INODE_STORE_DATABLOCK_NUMBER); */
+	/* if (!bh) { */
+	/* 	return -EIO; */
+	/* } */
+	bh = fsi->i_store_bh;
 
 	mutex_lock(&myezfs_lock);
 
 	// do the stuff
 	if (empty_inode_no >= EZFS_MAX_INODES) {
 		mutex_unlock(&myezfs_lock);
-		brelse(bh);
 		return -ENOSPC;
 	}
 
 	inode = iget_locked(sb, empty_inode_no);
 	if (!inode) {
 		mutex_unlock(&myezfs_lock);
-		brelse(bh);
 		return -ENOMEM;
 	}
 	off = empty_inode_no - EZFS_ROOT_INODE_NUMBER;
@@ -888,7 +889,7 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	di->file_size = inode->i_size;
 	di->nblocks = (inode->i_blocks)/8;
 	
-	printk(KERN_INFO "[MYEZ myez_mkdir] SBlock %lld 0x%lx\n", di->data_block_number, inode->i_mode);
+	printk(KERN_INFO "[MYEZ myez_mkdir] SBlock %lld 0x%d\n", di->data_block_number, inode->i_mode);
 
 	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), empty_inode_no);
 	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), empty_sblock_no);
@@ -898,7 +899,7 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	set_nlink(dir, dir->i_nlink + 1);
 	
-	printk(KERN_INFO "[MYEZ myez_mkdir] New Directory Created %s %d\n", dentry->d_name.name, inode->i_ino);
+	printk(KERN_INFO "[MYEZ myez_mkdir] New Directory Created %s %lu\n", dentry->d_name.name, inode->i_ino);
 	mark_inode_dirty(inode);
 	mark_inode_dirty(dir);
 	mark_buffer_dirty(bh);
@@ -909,14 +910,12 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		mutex_unlock(&myezfs_lock);
 		printk(KERN_INFO "error in myez_mkdir from add_entry : %d\n", err);
 		iput(inode);
-		brelse(bh);
 		return err;
 	}
 
 	mutex_unlock(&myezfs_lock);
 	mark_buffer_dirty(bh);
 	d_instantiate(dentry, inode);
-	brelse(bh);
 	return 0;
 }
 
@@ -991,7 +990,7 @@ static int myez_rmdir(struct inode *dir, struct dentry *dentry)
 	inode_dec_link_count(inode);
 	
 	mark_buffer_dirty(bh2);
-	brelse(bh2);
+	//brelse(bh2);
 	brelse(bh);
 
 	return 0;
