@@ -512,10 +512,6 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (empty_ino >= EZFS_MAX_INODES)
 		return -ENOSPC;
 
-	test_b = find_contiguous_block(sb, ((inode->i_blocks)/8) + 1, 0);
-	
-	if (test_b >= EZFS_MAX_DATA_BLKS)
-		return -ENOSPC;
 	
 	/* bh = sb_bread(sb, EZFS_INODE_STORE_DATABLOCK_NUMBER); */
 	/* if (!bh) { */
@@ -531,6 +527,14 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (!inode) {
 		mutex_unlock(&myezfs_lock);
 		return -ENOMEM;
+	}
+	
+	test_b = find_contiguous_block(sb, ((inode->i_blocks)/8) + 1, 0);
+	
+	if (test_b >= EZFS_MAX_DATA_BLKS) {
+		mutex_unlock(&myezfs_lock);
+		return -ENOSPC;
+		
 	}
 	off = empty_ino - EZFS_ROOT_INODE_NUMBER;
 	//	di = (struct ezfs_inode *)bh->b_data + off;//(off * sizeof(struct ezfs_inode));
@@ -1461,7 +1465,7 @@ static int myez_get_tree(struct fs_context *fc)
 static void myez_free_fc(struct fs_context *fc)
 {
 	printk(KERN_INFO "MYEZ FREE FC\n");
-	//kfree(fc->s_fs_info);
+	kfree(fc->s_fs_info);
 }
 
 static const struct fs_context_operations myez_context_ops = {
