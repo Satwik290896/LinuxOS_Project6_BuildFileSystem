@@ -521,21 +521,22 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	/* } */
 	bh = fsi->i_store_bh;
 
-	mutex_lock(&myezfs_lock);
 	inode = iget_locked(sb, empty_ino);
 
 	if (!inode) {
-		mutex_unlock(&myezfs_lock);
 		return -ENOMEM;
 	}
 	
-	test_b = find_contiguous_block(sb, 1, 0);
+	mutex_lock(&myezfs_lock);
+
+	
+	/*test_b = find_contiguous_block(sb, 1, 0);
 	
 	if (test_b >= EZFS_MAX_DATA_BLKS) {
 		mutex_unlock(&myezfs_lock);
 		return -ENOSPC;
 		
-	}
+	}*/
 	off = empty_ino - EZFS_ROOT_INODE_NUMBER;
 	//	di = (struct ezfs_inode *)bh->b_data + off;//(off * sizeof(struct ezfs_inode));
 	di = (struct ezfs_inode *)fsi->i_store_bh->b_data + off;
@@ -554,7 +555,6 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	set_nlink(inode, 1);
 
 
-	di->data_block_number = test_b;
 	di->mode = inode->i_mode;
 	di->uid = i_uid_read(inode);
 	di->gid = i_gid_read(inode);
@@ -566,11 +566,11 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	di->nblocks = (inode->i_blocks)/8;
 
 	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), empty_ino);
-	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), test_b);
+	//SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), test_b);
 
-	printk(KERN_INFO "[MYEZ LS4 Create] Make Sure Writing file %llu %lu %lu\n", empty_sblock_no, inode->i_ino, test_b);
-	if (test_b >= empty_sblock_no)
-		empty_sblock_no = test_b + 1;
+	printk(KERN_INFO "[MYEZ LS4 Create] Make Sure Writing file %llu %lu\n", empty_sblock_no, inode->i_ino);
+	/*if (test_b >= empty_sblock_no)
+		empty_sblock_no = test_b + 1;*/
 	//sempty_sblock_no += 1;
 	
 	
@@ -657,7 +657,7 @@ static int myez_rename(struct inode *old_dir, struct dentry *old_dentry,
 	sb = old_inode->i_sb;
 	info = sb->s_fs_info;
 
-	mutex_lock(&myezfs_lock);
+	//mutex_lock(&myezfs_lock);
 	old_bh = ezfs_find_entry(old_dir, &old_dentry->d_name, &old_de);
 
 	if (!old_bh)
@@ -688,7 +688,7 @@ static int myez_rename(struct inode *old_dir, struct dentry *old_dentry,
 	error = 0;
 
 end_rename:
-	mutex_unlock(&myezfs_lock);
+	//mutex_unlock(&myezfs_lock);
 	brelse(old_bh);
 	brelse(new_bh);
 	return error;
@@ -927,6 +927,11 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	/* } */
 	bh = fsi->i_store_bh;
 
+	inode = iget_locked(sb, empty_ino);
+	if (!inode) {
+		return -ENOMEM;
+	}
+	
 	mutex_lock(&myezfs_lock);
 
 	// do the stuff
@@ -938,11 +943,7 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	}
 
 
-	inode = iget_locked(sb, empty_ino);
-	if (!inode) {
-		mutex_unlock(&myezfs_lock);
-		return -ENOMEM;
-	}
+
 
 	test_b = find_contiguous_block(sb, 1, 0);
 	
