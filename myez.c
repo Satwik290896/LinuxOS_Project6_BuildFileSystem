@@ -529,7 +529,7 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 		return -ENOMEM;
 	}
 	
-	test_b = find_contiguous_block(sb, ((inode->i_blocks)/8) + 1, 0);
+	test_b = find_contiguous_block(sb, 1, 0);
 	
 	if (test_b >= EZFS_MAX_DATA_BLKS) {
 		mutex_unlock(&myezfs_lock);
@@ -937,18 +937,20 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		return -ENOSPC;
 	}
 
-	test_b = find_contiguous_block(sb, ((inode->i_blocks)/8) + 1, 0);
-	
-	if (test_b >= EZFS_MAX_DATA_BLKS) {
-		mutex_unlock(&myezfs_lock);
-		return -ENOSPC;
-	}
 
 	inode = iget_locked(sb, empty_ino);
 	if (!inode) {
 		mutex_unlock(&myezfs_lock);
 		return -ENOMEM;
 	}
+
+	test_b = find_contiguous_block(sb, 1, 0);
+	
+	if (test_b >= EZFS_MAX_DATA_BLKS) {
+		mutex_unlock(&myezfs_lock);
+		return -ENOSPC;
+	}
+		
 	off = empty_ino - EZFS_ROOT_INODE_NUMBER;
 	//	di = (struct ezfs_inode *)bh->b_data + off;
 	di = (struct ezfs_inode *)fsi->i_store_bh->b_data + off;
@@ -957,7 +959,7 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	inode->i_mode = mode;
 	inode->i_mode |= S_IFDIR;
 	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
-	inode->i_blocks = 1;
+	inode->i_blocks = 8;
 	inode->i_size = EZFS_BLOCK_SIZE;
 	inode->i_op = &myez_dir_inops;
 	inode->i_fop = &myez_dir_operations;
@@ -965,6 +967,7 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	inode->i_mapping->a_ops = &myez_aops;
 	inode->i_private = di;
 	set_nlink(inode, 2);
+	
 	
 	test_b = find_contiguous_block(sb, ((inode->i_blocks)/8) + 1, 0);
 	di->data_block_number = test_b;
