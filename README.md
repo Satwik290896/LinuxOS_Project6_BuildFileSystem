@@ -54,7 +54,10 @@ from a buffer to a file with fsync.
 
 The lack of symbolic link support in myezfs caused the ln program to not work.
 
-I suspect that the lack of fsync support caused emacs to be unable to save files.
+We suspect that the lack of fsync support caused emacs to be unable to save files.
+
+We also tested using the standard Linux programs for working with directories and files, such
+as touch, cat, mkdir, rmdir, cp, and mv.
 
 ### Team contributions
 
