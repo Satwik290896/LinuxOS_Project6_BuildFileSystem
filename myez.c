@@ -498,7 +498,7 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	inode->i_mode = mode;
 	inode->i_mode |= S_IFREG;
 	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
-	inode->i_blocks = 0;
+	inode->i_blocks = 8;
 	inode->i_size = 0;
 	inode->i_op = &myez_file_inode_operations;
 	inode->i_fop = &myez_file_operations;
@@ -897,7 +897,7 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	inode->i_mode = mode;
 	inode->i_mode |= S_IFDIR;
 	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
-	inode->i_blocks = 1;
+	inode->i_blocks = 8;
 	inode->i_size = EZFS_BLOCK_SIZE;
 	inode->i_op = &myez_dir_inops;
 	inode->i_fop = &myez_dir_operations;
