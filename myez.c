@@ -461,7 +461,6 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	int err, off;
 	unsigned long ino;
 	unsigned long empty_ino;
-	unsigned long test_b;
 
 	/*inode = new_inode(sb);
 	if (!inode)
@@ -926,11 +925,6 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	/* 	return -EIO; */
 	/* } */
 	bh = fsi->i_store_bh;
-
-	inode = iget_locked(sb, empty_ino);
-	if (!inode) {
-		return -ENOMEM;
-	}
 	
 	mutex_lock(&myezfs_lock);
 
@@ -942,11 +936,14 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		return -ENOSPC;
 	}
 
-
-
+	inode = iget_locked(sb, empty_ino);
+	if (!inode) {
+		mutex_unlock(&myezfs_lock);
+		return -ENOMEM;
+	}
 
 	test_b = find_contiguous_block(sb, 1, 0);
-	
+
 	if (test_b >= EZFS_MAX_DATA_BLKS) {
 		mutex_unlock(&myezfs_lock);
 		return -ENOSPC;
