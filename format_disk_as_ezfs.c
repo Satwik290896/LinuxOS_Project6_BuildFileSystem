@@ -318,6 +318,7 @@ int main(int argc, char *argv[])
 
 	/* lseek to big_txt data block */
 	int overflow = big_img_size % EZFS_BLOCK_SIZE;
+
 	if (overflow != 0) {
 		len = EZFS_BLOCK_SIZE - (big_img_size % EZFS_BLOCK_SIZE);
 		ret = write(fd, zeroes, len);
