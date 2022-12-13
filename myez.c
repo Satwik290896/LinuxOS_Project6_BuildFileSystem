@@ -86,7 +86,7 @@ static unsigned long find_contiguous_block(struct super_block *sb, unsigned long
 	
 	int i = 0;
 	
-	free_data_blk = (const long unsigned int *)(((struct ezfs_super_block *)fsi->sb_bh->b_data)->free_data_blocks);
+	free_data_blk = (long unsigned int *)(((struct ezfs_super_block *)fsi->sb_bh->b_data)->free_data_blocks);
 	//free_data_blk = free_data_blk >> indent;
 	empty_ino = find_first_zero_bit(free_data_blk + indent, EZFS_MAX_DATA_BLKS - indent);
 	
@@ -155,7 +155,7 @@ static int myez_get_block(struct inode *inode, sector_t block,
 	
 	
 	if (block < (inode->i_blocks)/8)  {
-		printk(KERN_INFO "[MYEZ LS1] Make Sure Writing file %llu %llu %llu %llu\n", block, phys, empty_sblock_no, inode->i_ino);
+		printk(KERN_INFO "[MYEZ LS1] Make Sure Writing file %llu %llu %llu %lu\n", block, phys, empty_sblock_no, inode->i_ino);
 		map_bh(bh_result, sb, phys);
 
 		return 0;
@@ -167,7 +167,7 @@ static int myez_get_block(struct inode *inode, sector_t block,
 	
 	mutex_lock(&myezfs_lock);
 	if (!IS_SET((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), phys)) {
-		printk(KERN_INFO "[MYEZ LS 2] Make Sure Writing file %llu %llu %llu %llu\n", block, phys, empty_sblock_no, inode->i_ino);
+		printk(KERN_INFO "[MYEZ LS 2] Make Sure Writing file %llu %llu %llu %lu\n", block, phys, empty_sblock_no, inode->i_ino);
 		map_bh(bh_result, sb, phys);
 		inode->i_blocks += 8;
 		SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), phys);
@@ -179,7 +179,7 @@ static int myez_get_block(struct inode *inode, sector_t block,
 	}
 	else {
 		test_b = find_contiguous_block(sb, ((inode->i_blocks)/8) + 1, 0);
-		printk(KERN_INFO "[MYEZ LS3] Make Sure Writing file %llu %llu %llu %llu %llu %llu\n", block, phys, empty_sblock_no, inode->i_ino, ((inode->i_blocks)/8) + 1, test_b);
+		printk(KERN_INFO "[MYEZ LS3] Make Sure Writing file %llu %llu %llu %lu %llu %lu\n", block, phys, empty_sblock_no, inode->i_ino, ((inode->i_blocks)/8) + 1, test_b);
 		/*Need to do Stuff*/
 		
 		/*if ((empty_sblock_no + ((inode->i_blocks)/8)) >= EZFS_MAX_DATA_BLKS) {
@@ -568,7 +568,7 @@ static int myez_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), empty_ino);
 	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), test_b);
 
-	printk(KERN_INFO "[MYEZ LS4 Create] Make Sure Writing file %llu %llu %llu\n", empty_sblock_no, inode->i_ino, test_b);
+	printk(KERN_INFO "[MYEZ LS4 Create] Make Sure Writing file %llu %lu %lu\n", empty_sblock_no, inode->i_ino, test_b);
 	if (test_b >= empty_sblock_no)
 		empty_sblock_no = test_b + 1;
 	//sempty_sblock_no += 1;
@@ -606,7 +606,7 @@ static int myez_unlink(struct inode *dir, struct dentry *dentry)
 	struct ezfs_dir_entry *de;
 	struct inode *inode = d_inode(dentry);
 	
-	printk(KERN_INFO "[MYEZ_UNLINK DEL]  --- Loading module... Hello World!: \n", inode->i_ino);
+	printk(KERN_INFO "[MYEZ_UNLINK DEL]  --- Loading module... Hello World!: \n");
 	//mutex_lock(&myezfs_lock);
 	bh = ezfs_find_entry(dir, &dentry->d_name, &de);
 	
@@ -983,7 +983,7 @@ static int myez_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_inodes), empty_ino);
 	SETBIT((((struct ezfs_super_block *)(fsi->sb_bh->b_data))->free_data_blocks), test_b);
 
-	printk(KERN_INFO "[MYEZ LS4 Create Dir] Make Sure Writing file %llu %llu %llu\n", empty_sblock_no, inode->i_ino, test_b);
+	printk(KERN_INFO "[MYEZ LS4 Create Dir] Make Sure Writing file %llu %lu %lu\n", empty_sblock_no, inode->i_ino, test_b);
 	if (test_b >= empty_sblock_no)
 			empty_sblock_no = test_b + 1;
 	//empty_sblock_no += 1;
@@ -1163,22 +1163,20 @@ static int clear_empty_directory(struct super_block *s, struct inode *inode)
 	//unsigned long temp_inode_no;
 	unsigned long block_no;
 	struct ezfs_sb_buffer_heads *fsi = s->s_fs_info;
-	struct ezfs_inode *einode = ((struct ezfs_inode *)inode->i_private);
-	
-	
+	//struct ezfs_inode *einode = ((struct ezfs_inode *)inode->i_private);
+
 	block_no = ((struct ezfs_inode *)inode->i_private)->data_block_number;
 	bh = sb_bread(s, block_no);
-	
+
 	if (!bh) {
 		brelse(bh);
 		return 0;
 	}
 
-	
 	while (offset < inode->i_size) {
 		de = (struct ezfs_dir_entry *)(bh->b_data + offset);
 		offset += sizeof(struct ezfs_dir_entry);
-	
+
 		if (de->active == 1) {
 			return 1;
 		}
