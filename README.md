@@ -14,7 +14,7 @@ cs4213: 16hrs, hmwk1 < hmwk2 < hmwk6 < hmwk4 < hmwk3 < hmwk5
 
 mkr2151: 22hrs, hmwk1 < hmwk2 < hmwk6 < hmwk4 < hmwk5 < hmwk3
 
-sv2665:
+sv2665: 35hrs, hmwk1 < hmwk2 < hmwk6 < hmwk4 < hmwk3 < hmwk5
 
 ### Main files used
 
