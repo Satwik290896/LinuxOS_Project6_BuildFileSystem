@@ -10,7 +10,7 @@ Sai Satwik Vaddi
 
 ### Hours spent and difficulty rankings
 
-cs4213:
+cs4213: 16hrs, hmwk1 < hmwk2 < hmwk6 < hmwk4 < hmwk3 < hmwk5
 
 mkr2151: 22hrs, hmwk1 < hmwk2 < hmwk6 < hmwk4 < hmwk5 < hmwk3
 
