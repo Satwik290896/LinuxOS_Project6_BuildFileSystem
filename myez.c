@@ -1461,7 +1461,7 @@ static int myez_get_tree(struct fs_context *fc)
 static void myez_free_fc(struct fs_context *fc)
 {
 	printk(KERN_INFO "MYEZ FREE FC\n");
-	kfree(fc->s_fs_info);
+	//kfree(fc->s_fs_info);
 }
 
 static const struct fs_context_operations myez_context_ops = {
