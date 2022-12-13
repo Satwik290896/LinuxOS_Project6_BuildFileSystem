@@ -34,7 +34,23 @@ not made many significant assumptions.
 
 ### Testing
 
-TODO
+We used the following applications, among others, to test our file system:
+
+vi : we were able to successfully edit and save files with vi.
+
+emacs : we were unable to successfully edit and save files with emacs.
+
+gcc : we were able to successfully compile source code with gcc, and then run the resulting program.
+
+ln : we were unable to successfully use ln to create symbolic links.
+
+Some file system functions implemented in the default file system that myezfs does not
+support include support for symbolic links, extended file attributes, and forcing data to write
+from a buffer to a file with fsync.
+
+The lack of symbolic link support in myezfs caused the ln program to not work.
+
+I suspect that the lack of fsync support caused emacs to be unable to save files.
 
 ### Parts worked on
 
