@@ -32,6 +32,10 @@ into an EZFS file system.
 We do not believe our solution significantly differs from the assignment, and we have
 not made many significant assumptions.
 
+However, we did find that our file system is unable to create a directory with the same
+name as a file in the current directory, and doing so will crash the file system
+(for example, 'mkdir hello' in a directory containing 'hello.txt').
+
 ### Testing
 
 We used the following applications, among others, to test our file system:
