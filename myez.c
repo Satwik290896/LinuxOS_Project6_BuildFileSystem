@@ -158,7 +158,7 @@ static int myez_get_block(struct inode *inode, sector_t block,
 		return 0;
 	}
 
-	if (phys >= EZFS_MAX_DATA_BLKS + 2)
+	if (phys >= EZFS_MAX_DATA_BLKS)
 		return -ENOSPC;
 
 	mutex_lock(&myezfs_lock);
