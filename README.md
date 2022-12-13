@@ -52,6 +52,29 @@ The lack of symbolic link support in myezfs caused the ln program to not work.
 
 I suspect that the lack of fsync support caused emacs to be unable to save files.
 
-### Parts worked on
+### Team contributions
 
-TODO
+We all worked together on debugging and helped each other out, but generally we each
+specifically worked on the following sections:
+
+Part 3 (formatting) : Mohsin and Sai
+
+Part 4 (initializing and mounting) : Sai
+
+Part 5 (listing root dir) : Sai
+
+Part 6 (listing subdirs) : Mohsin and Sai
+
+Part 7 (reading files) : Sai
+
+Part 8 (writing files) : Sai
+
+Part 9 (creating files) : Sai and Mohsin
+
+Part 10 (deleting files) : Sai and Mohsin
+
+Part 11 (mkdir and rmdir) : Mohsin and Sai
+
+Part 12 (compiling and running) : Sai
+
+Part 13 (renaming) : Chun-Wei
