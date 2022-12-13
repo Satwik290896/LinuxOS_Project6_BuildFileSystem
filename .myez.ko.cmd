@@ -1,1 +1,0 @@
-cmd_/home/sai/Desktop/v2/f22-hmwk6-team27/myez.ko := ld -r -m elf_x86_64 -z noexecstack --build-id=sha1  -T arch/x86/module.lds -o /home/sai/Desktop/v2/f22-hmwk6-team27/myez.ko /home/sai/Desktop/v2/f22-hmwk6-team27/myez.o /home/sai/Desktop/v2/f22-hmwk6-team27/myez.mod.o;  true
